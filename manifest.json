@@ -1,0 +1,15 @@
+
+{
+  "manifest_version": 3,
+  "permissions": ["storage"],
+  "name": "YouTube Progress Bar Tools",
+  "version": "1.1",
+  "description": "Custom YouTube progress bar markers",
+  "content_scripts": [{
+      "matches": ["*://*.youtube.com/*"],
+      "css": ["styles.css"],
+      "js": ["content.js"],
+      "all_frames": true,
+      "run_at": "document_end"
+  }]
+}

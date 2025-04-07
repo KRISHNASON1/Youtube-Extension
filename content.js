@@ -16,7 +16,7 @@ function formatTime(seconds) {
         tooltip.className = 'ytp-marker-tooltip note-container';
     
         // For mouse events on tooltip, only block events if they originate outside the note editor or toolbar.
-        ['mousedown', 'mouseup', 'click', 'mouseenter', 'mouseover', 'mousemove'].forEach(evt => {
+        ['mousedown', 'mouseup', 'click', 'mouseenter', 'mouseover'].forEach(evt => {
             tooltip.addEventListener(evt, function(e) {
                 if (!e.target.closest('.note-editor') && !e.target.closest('.note-toolbar')) {
                     e.stopPropagation();
@@ -29,7 +29,7 @@ function formatTime(seconds) {
         const header = document.createElement('div');
         header.className = 'note-header';
         
-        // Left: Time display (set to actual video time)
+        // Left: Time display (actual video time)
         const timeSpan = document.createElement('span');
         timeSpan.className = 'note-time';
         timeSpan.textContent = formatTime(currentTime);
@@ -101,7 +101,6 @@ function formatTime(seconds) {
         noteEditor.setAttribute('contenteditable', 'true');
         noteEditor.setAttribute('spellcheck', 'false');
         noteEditor.style.outline = 'none';
-        // Apply standard font styling (adjust as desired)
         noteEditor.style.fontFamily = 'Arial, sans-serif';
         noteEditor.style.fontSize = '14px';
         if (storage[currentTime]) {
@@ -137,7 +136,6 @@ function formatTime(seconds) {
             noteEditor.focus();
         });
         
-        // For the List button, ensure the caret is inside noteEditor.
         listBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             noteEditor.focus();
@@ -154,7 +152,6 @@ function formatTime(seconds) {
             noteEditor.focus();
         });
         
-        // Code button functionality: if text is selected, wrap it in <code>; otherwise, insert a code block.
         codeBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             let sel = window.getSelection();
@@ -173,7 +170,6 @@ function formatTime(seconds) {
             stylesDropdown.style.display = (stylesDropdown.style.display === 'none') ? 'block' : 'none';
         });
         
-        // Dropdown option actions for Styles
         optionNormal.addEventListener('click', (e) => {
             e.stopPropagation();
             document.execCommand('formatBlock', false, 'p');
@@ -214,14 +210,12 @@ function formatTime(seconds) {
         actions.appendChild(cancelBtn);
         actions.appendChild(saveBtn);
         
-        // Save note functionality
         saveBtn.addEventListener('click', () => {
             storage[currentTime] = noteEditor.innerHTML;
             localStorage.setItem('ytMarkers', JSON.stringify(storage));
             console.log('Note saved for time', currentTime);
         });
         
-        // Cancel functionality: clear the note editor
         cancelBtn.addEventListener('click', () => {
             noteEditor.innerHTML = '';
             charCount.textContent = '0';
@@ -233,7 +227,6 @@ function formatTime(seconds) {
         tooltip.appendChild(noteEditor);
         tooltip.appendChild(actions);
         
-        // ----- Tooltip Display Logic -----
         let isClicked = false;
         marker.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -253,7 +246,6 @@ function formatTime(seconds) {
             }
         });
         
-        // Optional: Hover to show tooltip
         marker.addEventListener('mouseenter', () => {
             tooltip.style.display = 'block';
         });
@@ -306,4 +298,58 @@ function formatTime(seconds) {
     
     addButtonToControls();
     setInterval(addButtonToControls, 1000);
+})();
+
+(function() {
+    // Injection for custom UI toolbar below target element.
+    function injectUIToolbar() {
+      const target = document.querySelector('.watch-active-metadata.style-scope.ytd-watch-flexy');
+      if (!target) {
+        return setTimeout(injectUIToolbar, 1000);
+      }
+      
+      const container = document.createElement('div');
+      container.className = 'custom-ui-toolbar';
+      
+      container.innerHTML = `
+        <button class="main-button">Create a new note at 6:14</button>
+        <div class="dropdown">
+          <button class="dropdown-toggle">All Lectures</button>
+          <div class="dropdown-menu">
+            <div class="dropdown-item">All Lectures</div>
+            <div class="dropdown-item">Current Lecture</div>
+          </div>
+        </div>
+        <div class="dropdown">
+          <button class="dropdown-toggle">Sort by most recent</button>
+          <div class="dropdown-menu">
+            <div class="dropdown-item">Sort by most recent</div>
+            <div class="dropdown-item">Sort by oldest</div>
+          </div>
+        </div>
+      `;
+      
+      target.parentNode.insertBefore(container, target.nextSibling);
+      
+      container.querySelectorAll('.dropdown-toggle').forEach(toggle => {
+        toggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const menu = toggle.nextElementSibling;
+          container.querySelectorAll('.dropdown-menu').forEach(m => {
+            if (m !== menu) m.style.display = 'none';
+          });
+          menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
+        });
+      });
+      
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.dropdown')) {
+          container.querySelectorAll('.dropdown-menu').forEach(menu => {
+            menu.style.display = 'none';
+          });
+        }
+      });
+    }
+    
+    injectUIToolbar();
 })();

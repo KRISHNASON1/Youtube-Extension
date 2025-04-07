@@ -298,11 +298,11 @@
 /* Increase the note container size */
 .note-container {
   width: 480px;       /* Was 400px */
-  height: 300px;      /* Was ~240px */
+  height: 200px;      /* Was ~240px */
   background: #FFFFFF;
   padding: 16px;
   box-sizing: border-box;
-  border-radius: 4px;
+  border-radius: 2px;
   font-family: Arial, sans-serif;
   position: absolute; /* If you still need absolute positioning */
   z-index: 2147483647 !important;
@@ -338,3 +338,73 @@
     text-shadow: none !important;
     color: rgb(0, 0, 0) !important;
 }
+/* ===== Custom UI Toolbar Styles ===== */
+.custom-ui-toolbar {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px;
+  background: rgb(15, 15, 15);
+  border: 1px solid #6D28D9;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  font-family: Arial, sans-serif;
+}
+.custom-ui-toolbar .main-button {
+  background: rgb(15, 15, 15);
+  border: 1px solid #6D28D9;
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+  position: relative;
+  width: 100%;
+  display: block;
+}
+.custom-ui-toolbar .main-button:hover {
+  background: rgb(46, 45, 45);
+  transition: background 0.2s;
+}
+.custom-ui-toolbar .dropdown {
+  position: relative;
+  display: block;
+
+}
+.custom-ui-toolbar .dropdown-toggle {
+  background: rgb(15, 15, 15);
+  border: 1px solid #6D28D9;
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+.custom-ui-toolbar .dropdown-toggle:hover {
+  background: rgb(15, 15, 15);
+}
+.custom-ui-toolbar .dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: rgb(15, 15, 15);
+  border: 1px solid #6D28D9;
+  border-radius: 4px;
+  min-width: 160px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  z-index: 999;
+}
+.custom-ui-toolbar .dropdown-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #ffffff;
+}
+.custom-ui-toolbar .dropdown-item:hover {
+  background: rgb(15, 15, 15);
+}
+  

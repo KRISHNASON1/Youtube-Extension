@@ -408,3 +408,118 @@
   background: rgb(15, 15, 15);
 }
   
+/* ===== NEW NOTE INTERFACE STYLES ===== */
+
+/* Container for saved notes (inserted immediately after the custom toolbar) */
+#savedNotes {
+  margin: 10px auto;
+  width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Edit mode container for creating/editing notes */
+#editModeContainer {
+  margin: 10px auto;
+  width: 480px;
+  border: 1px solid #6D28D9;
+  border-radius: 4px;
+  font-family: Arial, sans-serif;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  padding: 12px;
+  box-sizing: border-box;
+  display: none;
+}
+
+/* Edit mode toolbar styles */
+.note-edit-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  position: relative;
+}
+.note-edit-toolbar select {
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.note-edit-toolbar .format-btn {
+  background: none;
+  border: 1px solid #ccc;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.note-edit-toolbar .format-btn:hover {
+  background: #f0f0f0;
+}
+.char-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: #666;
+}
+
+/* Edit mode text editor */
+.note-editor {
+  border: 1px solid #6D28D9;
+  border-radius: 4px;
+  padding: 8px;
+  min-height: 100px;
+  background: #fff;
+  font-size: 14px;
+  line-height: 1.4;
+  margin-bottom: 8px;
+  overflow-y: auto;
+}
+
+/* Edit mode action buttons */
+.note-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.note-edit-actions .note-btn {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+}
+.note-cancel {
+  background: #eee;
+  color: #333;
+}
+.note-cancel:hover {
+  background: #ddd;
+}
+.note-save {
+  background: #6D28D9;
+  color: #fff;
+}
+.note-save:hover {
+  background: #5a1fbf;
+}
+
+
+/* Override note container styling inside savedNotes */
+#savedNotes .note-container {
+  position: relative !important;
+  width: 100% !important;
+  height: auto !important;
+  margin-bottom: 10px;
+  top: 0;
+  left: 0;
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+/* Inline editing note should fill container */
+.note-container.inline-editing {
+  width: 100%;
+}
+  

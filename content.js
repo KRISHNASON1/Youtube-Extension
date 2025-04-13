@@ -8,14 +8,15 @@ function formatTime(seconds) {
 }
 
 (function() {
+    // ********** Marker Functionality (unchanged except for note-save event) **********
     let markers = [];
     
     function createTooltip(marker, currentTime) {
-        // Create the main container for the note interface
+        // Create the main container for the note interface in the tooltip
         const tooltip = document.createElement('div');
         tooltip.className = 'ytp-marker-tooltip note-container';
     
-        // For mouse events on tooltip, only block events if they originate outside the note editor or toolbar.
+        // Block mouse events that originate outside the note editor or toolbar.
         ['mousedown', 'mouseup', 'click', 'mouseenter', 'mouseover'].forEach(evt => {
             tooltip.addEventListener(evt, function(e) {
                 if (!e.target.closest('.note-editor') && !e.target.closest('.note-toolbar')) {
@@ -29,21 +30,21 @@ function formatTime(seconds) {
         const header = document.createElement('div');
         header.className = 'note-header';
         
-        // Left: Time display (actual video time)
+        // Left: Display current video time.
         const timeSpan = document.createElement('span');
         timeSpan.className = 'note-time';
         timeSpan.textContent = formatTime(currentTime);
         
-        // Right: Toolbar container
+        // Right: Toolbar for text formatting.
         const toolbar = document.createElement('div');
         toolbar.className = 'note-toolbar';
         
-        // Create Styles button with dropdown
+        // Create a "Styles" button with dropdown.
         const stylesBtn = document.createElement('button');
         stylesBtn.className = 'note-btn note-styles';
         stylesBtn.textContent = 'Styles ▼';
         
-        // Create Bold, Italic, List, and Code buttons
+        // Create Bold, Italic, List, and Code buttons.
         const boldBtn = document.createElement('button');
         boldBtn.className = 'note-btn note-bold';
         boldBtn.textContent = 'B';
@@ -60,12 +61,12 @@ function formatTime(seconds) {
         codeBtn.className = 'note-btn note-code';
         codeBtn.textContent = '<>';
         
-        // Create character count display
+        // Character count display.
         const charCount = document.createElement('span');
         charCount.className = 'note-char-count';
         charCount.textContent = storage[currentTime] ? storage[currentTime].length : '999';
         
-        // Create dropdown for Styles
+        // Create dropdown for Styles.
         const stylesDropdown = document.createElement('div');
         stylesDropdown.className = 'note-styles-dropdown';
         stylesDropdown.style.display = 'none';
@@ -81,7 +82,7 @@ function formatTime(seconds) {
         stylesDropdown.appendChild(optionQuote);
         stylesDropdown.appendChild(optionHeading4);
         
-        // Append toolbar buttons and dropdown in order
+        // Append formatting buttons and dropdown to toolbar.
         toolbar.appendChild(stylesBtn);
         toolbar.appendChild(boldBtn);
         toolbar.appendChild(italicBtn);
@@ -90,7 +91,7 @@ function formatTime(seconds) {
         toolbar.appendChild(charCount);
         toolbar.appendChild(stylesDropdown);
         
-        // Prevent toolbar buttons from stealing focus so that selection is preserved.
+        // Prevent toolbar buttons from stealing focus.
         [stylesBtn, boldBtn, italicBtn, listBtn, codeBtn].forEach(btn => {
             btn.addEventListener('mousedown', e => e.preventDefault());
         });
@@ -107,18 +108,18 @@ function formatTime(seconds) {
             noteEditor.innerHTML = storage[currentTime];
         }
         
-        // Allow events inside noteEditor to work normally
+        // Allow events inside noteEditor.
         ['mousedown', 'mouseup', 'click'].forEach(evt => {
             noteEditor.addEventListener(evt, function(e) {
                 e.stopPropagation();
             }, false);
         });
     
-        // Prevent key events from propagating to YouTube shortcuts
+        // Prevent key events from propagating to YouTube shortcuts.
         noteEditor.addEventListener('keydown', e => e.stopPropagation(), true);
         noteEditor.addEventListener('keyup', e => e.stopPropagation(), true);
         
-        // Update character count on input
+        // Update character count on input.
         noteEditor.addEventListener('input', () => {
             charCount.textContent = noteEditor.innerText.length;
         });
@@ -141,7 +142,6 @@ function formatTime(seconds) {
             noteEditor.focus();
             let sel = window.getSelection();
             if (sel.rangeCount === 0 || !sel.getRangeAt(0).commonAncestorContainer.closest('.note-editor')) {
-                // Place caret at the end if not inside noteEditor
                 let range = document.createRange();
                 range.selectNodeContents(noteEditor);
                 range.collapse(false);
@@ -164,7 +164,7 @@ function formatTime(seconds) {
             noteEditor.focus();
         });
         
-        // Toggle dropdown on Styles button click
+        // Toggle dropdown on Styles button click.
         stylesBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             stylesDropdown.style.display = (stylesDropdown.style.display === 'none') ? 'block' : 'none';
@@ -191,7 +191,7 @@ function formatTime(seconds) {
             noteEditor.focus();
         });
         
-        // Assemble header
+        // Assemble header.
         header.appendChild(timeSpan);
         header.appendChild(toolbar);
     
@@ -210,10 +210,24 @@ function formatTime(seconds) {
         actions.appendChild(cancelBtn);
         actions.appendChild(saveBtn);
         
+        // Save note from tooltip: store to localStorage and add the view-mode note to savedNotes.
         saveBtn.addEventListener('click', () => {
             storage[currentTime] = noteEditor.innerHTML;
             localStorage.setItem('ytMarkers', JSON.stringify(storage));
             console.log('Note saved for time', currentTime);
+            
+            const savedNotesContainer = document.getElementById('savedNotes');
+            if (savedNotesContainer && window.createNoteView) {
+                const savedNote = window.createNoteView(noteEditor.innerHTML, formatTime(currentTime));
+                // Prepend new note so the newest appears at the top.
+                if (savedNotesContainer.firstChild) {
+                    savedNotesContainer.insertBefore(savedNote, savedNotesContainer.firstChild);
+                } else {
+                    savedNotesContainer.appendChild(savedNote);
+                }
+            }
+            tooltip.style.display = 'none';
+            marker.classList.remove('active');
         });
         
         cancelBtn.addEventListener('click', () => {
@@ -300,19 +314,75 @@ function formatTime(seconds) {
     setInterval(addButtonToControls, 1000);
 })();
 
+// ********** Injection for Custom UI Toolbar and Inline Note Creation **********
 (function() {
-    // Injection for custom UI toolbar below target element.
+    // Function to create a new inline editable note inserted into savedNotes.
+    function createInlineEditableNote() {
+       const noteContainer = document.createElement('div');
+       // This inline-editing note should resemble the tooltip note-container;
+       // we add the class "inline-editing" and later override width via CSS.
+       noteContainer.className = 'note-container inline-editing';
+       
+       // Header with static time label.
+       const header = document.createElement('div');
+       header.className = 'note-header';
+       const timeSpan = document.createElement('span');
+       timeSpan.className = 'note-time';
+       timeSpan.textContent = '6:14';
+       header.appendChild(timeSpan);
+       noteContainer.appendChild(header);
+       
+       // Editable note area.
+       const editor = document.createElement('div');
+       editor.className = 'note-editor';
+       editor.setAttribute('contenteditable', 'true');
+       noteContainer.appendChild(editor);
+       
+       // Action buttons: Cancel and Save.
+       const actionsDiv = document.createElement('div');
+       actionsDiv.className = 'note-edit-actions';
+       const cancelBtn = document.createElement('button');
+       cancelBtn.className = 'note-btn note-cancel';
+       cancelBtn.textContent = 'Cancel';
+       const saveBtn = document.createElement('button');
+       saveBtn.className = 'note-btn note-save';
+       saveBtn.textContent = 'Save note';
+       actionsDiv.appendChild(cancelBtn);
+       actionsDiv.appendChild(saveBtn);
+       noteContainer.appendChild(actionsDiv);
+       
+       // Cancel removes the note.
+       cancelBtn.addEventListener('click', () => {
+           noteContainer.remove();
+       });
+       
+       // Save converts the inline editable note into a view-mode note.
+       saveBtn.addEventListener('click', () => {
+           const content = editor.innerHTML.trim();
+           if (content === '') {
+               alert('Note cannot be empty');
+               return;
+           }
+           const viewNote = window.createNoteView(content, timeSpan.textContent);
+           // Prepend new note: replace inline editable note with view-mode note.
+           noteContainer.parentNode.replaceChild(viewNote, noteContainer);
+       });
+       
+       return noteContainer;
+    }
+    
     function injectUIToolbar() {
       const target = document.querySelector('.watch-active-metadata.style-scope.ytd-watch-flexy');
       if (!target) {
         return setTimeout(injectUIToolbar, 1000);
       }
       
+      // Create custom toolbar container.
       const container = document.createElement('div');
       container.className = 'custom-ui-toolbar';
       
       container.innerHTML = `
-        <button class="main-button">Create a new note at 6:14</button>
+        <button id="createNoteButton" class="main-button">Create a new note at 6:14</button>
         <div class="dropdown">
           <button class="dropdown-toggle">All Lectures</button>
           <div class="dropdown-menu">
@@ -331,6 +401,7 @@ function formatTime(seconds) {
       
       target.parentNode.insertBefore(container, target.nextSibling);
       
+      // Dropdown toggle handlers.
       container.querySelectorAll('.dropdown-toggle').forEach(toggle => {
         toggle.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -341,7 +412,6 @@ function formatTime(seconds) {
           menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
         });
       });
-      
       document.addEventListener('click', (e) => {
         if (!e.target.closest('.dropdown')) {
           container.querySelectorAll('.dropdown-menu').forEach(menu => {
@@ -349,6 +419,86 @@ function formatTime(seconds) {
           });
         }
       });
+      
+      // Inject the saved notes container immediately after the toolbar.
+      const savedNotesContainer = document.createElement('div');
+      savedNotesContainer.id = 'savedNotes';
+      container.parentNode.insertBefore(savedNotesContainer, container.nextSibling);
+      
+      // When createNoteButton is clicked, insert a new inline editable note at the top.
+      const createNoteButton = container.querySelector('#createNoteButton');
+      createNoteButton.addEventListener('click', () => {
+          const newEditableNote = createInlineEditableNote();
+          if (savedNotesContainer.firstChild) {
+              savedNotesContainer.insertBefore(newEditableNote, savedNotesContainer.firstChild);
+          } else {
+              savedNotesContainer.appendChild(newEditableNote);
+          }
+      });
+      
+      // Export createNoteView globally for reuse by marker tooltips.
+      window.createNoteView = function(noteContent, noteTime) {
+           const container = document.createElement('div');
+           container.className = 'note-container';
+           
+           // Header with time label and Edit/Delete buttons.
+           const header = document.createElement('div');
+           header.className = 'note-header';
+           
+           const timeSpan = document.createElement('span');
+           timeSpan.className = 'note-time';
+           timeSpan.textContent = noteTime || '3:05';
+           header.appendChild(timeSpan);
+           
+           const actionsDiv = document.createElement('div');
+           actionsDiv.className = 'note-actions';
+           
+           const editBtn = document.createElement('button');
+           editBtn.className = 'note-btn note-edit';
+           editBtn.innerHTML = '✏️';
+           editBtn.addEventListener('click', (e) => {
+               e.stopPropagation();
+               const inlineNote = createInlineEditableNote();
+               inlineNote.querySelector('.note-editor').innerHTML = noteContent;
+               inlineNote.querySelector('.note-time').textContent = noteTime;
+               container.parentNode.replaceChild(inlineNote, container);
+           });
+           actionsDiv.appendChild(editBtn);
+           
+           const deleteBtn = document.createElement('button');
+           deleteBtn.className = 'note-btn note-delete';
+           deleteBtn.innerHTML = '🗑️';
+           deleteBtn.addEventListener('click', (e) => {
+               e.stopPropagation();
+               container.remove();
+           });
+           actionsDiv.appendChild(deleteBtn);
+           
+           header.appendChild(actionsDiv);
+           container.appendChild(header);
+           
+           // Content section with heading, subheading and note body.
+           const contentDiv = document.createElement('div');
+           contentDiv.className = 'note-content';
+           
+           const headingEl = document.createElement('h3');
+           headingEl.className = 'note-title';
+           headingEl.textContent = '11. Day 11 – Beginner – The Blackjack Capstone Project';
+           contentDiv.appendChild(headingEl);
+           
+           const subheadingEl = document.createElement('p');
+           subheadingEl.className = 'note-subtitle';
+           subheadingEl.textContent = '79. Blackjack Program Requirements and Game Rules';
+           contentDiv.appendChild(subheadingEl);
+           
+           const bodyDiv = document.createElement('div');
+           bodyDiv.className = 'note-body';
+           bodyDiv.innerHTML = noteContent;
+           contentDiv.appendChild(bodyDiv);
+           
+           container.appendChild(contentDiv);
+           return container;
+      };
     }
     
     injectUIToolbar();

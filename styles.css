@@ -22,11 +22,15 @@
 
 .ytp-live-progress,
 .ytp-scrubber-container,
-.ytp-scrubber-button,   
-.ytp-swatch-background-color,
 .ytp-volume-slider-handle {
   background: rgb(164, 53, 240) !important;
 }
+
+
+.ytp-scrubber-button.ytp-swatch-background-color {
+  display: none !important;
+}
+
 
 
 
@@ -44,12 +48,12 @@
 .ytp-marker::after {
   content: '';
   position: absolute;
-  top: -10px;
+  top: -8px;
   left: -3px;
-  width: 10px;
-  height: 14px;
+  width: 7px;
+  height: 11px;
   background: rgb(233, 231, 41) !important;  /* Changed from red to yellow */
-  border-radius: 2px;
+  border-radius: 1px;
 }
 
 /* ===== Button Styling ===== */

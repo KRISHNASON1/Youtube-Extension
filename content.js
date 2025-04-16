@@ -48,7 +48,7 @@ function createNoteEditor(noteId, time, content, isTooltip) {
   if (isTooltip) {
     container.className = 'ytp-marker-tooltip note-container';
     container.style.display = 'block';
-    // Prevent events in the tooltip from triggering other elements.
+    // Prevent events in the tooltip from bubbling.
     container.addEventListener('click', e => e.stopPropagation());
     container.addEventListener('mousedown', e => e.stopPropagation());
   } else {
@@ -156,7 +156,7 @@ function createNoteEditor(noteId, time, content, isTooltip) {
   noteEditor.innerHTML = content;
   container.appendChild(noteEditor);
   
-  // Stop event propagation inside the note editor.
+  // Stop propagation of mouse and key events inside the editor.
   ['mousedown', 'mouseup', 'click'].forEach(evt => {
     noteEditor.addEventListener(evt, e => e.stopPropagation());
   });
@@ -182,16 +182,25 @@ function createNoteEditor(noteId, time, content, isTooltip) {
   actions.appendChild(saveBtn);
   container.appendChild(actions);
   
-  // Cancel: Revert content if already saved, otherwise remove editor.
+  // Cancel: For tooltip, simply hide editor; for inline, revert or remove.
   cancelBtn.addEventListener('click', () => {
-    if (storage[noteId]) {
-      noteEditor.innerHTML = storage[noteId].content;
+    if (container.classList.contains('ytp-marker-tooltip')) {
+      // For tooltip, revert if saved content exists and then hide.
+      if (storage[noteId]) {
+        noteEditor.innerHTML = storage[noteId].content;
+      }
+      container.style.display = 'none';
     } else {
-      container.remove();
+      // Inline: revert if note was saved; otherwise, remove the editor.
+      if (storage[noteId]) {
+        noteEditor.innerHTML = storage[noteId].content;
+      } else {
+        container.remove();
+      }
     }
   });
   
-  // Save: Validate content then update all editors sharing the same noteId.
+  // Save: Validate content, update all editors, and handle view transformation.
   saveBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const newContent = noteEditor.innerHTML.trim();
@@ -200,14 +209,22 @@ function createNoteEditor(noteId, time, content, isTooltip) {
       return;
     }
     updateAllNoteEditors(noteId, time, newContent);
-    // If this editor is inline (in savedNotes), replace it with a final view note.
+    
+    // If this editor is inline (savedNotes), replace it with a final view note.
     if (container.classList.contains('inline-editing')) {
       const finalView = window.createNoteView(newContent, time, noteId);
       container.parentNode.replaceChild(finalView, container);
     }
-    // If this editor is from the tooltip, hide it.
+    // If this editor is from a tooltip, hide the tooltip and ensure the note appears
+    // in the savedNotes container.
     if (container.classList.contains('ytp-marker-tooltip')) {
       container.style.display = 'none';
+      const savedNotesContainer = document.getElementById('savedNotes');
+      let inlineNote = savedNotesContainer.querySelector(`[data-note-id="${noteId}"]`);
+      if (!inlineNote) {
+        const finalView = window.createNoteView(newContent, time, noteId);
+        savedNotesContainer.appendChild(finalView);
+      }
     }
   });
   
@@ -215,7 +232,7 @@ function createNoteEditor(noteId, time, content, isTooltip) {
 }
 
 // --------------------------------------------------------------------------
-// Create Marker for Note
+// Create Marker for Note (Tooltip Version)
 // --------------------------------------------------------------------------
 function createMarkerForNote(noteId, time, initialContent) {
   const video = document.querySelector('video');
@@ -230,7 +247,7 @@ function createMarkerForNote(noteId, time, initialContent) {
   const tooltip = createNoteEditor(noteId, time, initialContent, true);
   marker.appendChild(tooltip);
   
-  // Toggle tooltip display on interactions.
+  // Toggle tooltip display on marker interactions.
   let isActive = false;
   marker.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -254,7 +271,7 @@ function createMarkerForNote(noteId, time, initialContent) {
 }
 
 // --------------------------------------------------------------------------
-// Inject Custom UI Toolbar (Single Instance)
+// Inject Custom UI Toolbar & Inline Note Creation (Single Instance)
 // --------------------------------------------------------------------------
 (function injectUIToolbar() {
   function createUI() {
@@ -264,7 +281,7 @@ function createMarkerForNote(noteId, time, initialContent) {
     const container = document.createElement('div');
     container.className = 'custom-ui-toolbar';
     
-    // Toolbar HTML: only one instance will be inserted.
+    // Only one toolbar instance is inserted.
     container.innerHTML = `
       <button id="createNoteButton" class="main-button">Create a new note</button>
       <div class="dropdown">
@@ -303,7 +320,7 @@ function createMarkerForNote(noteId, time, initialContent) {
       }
     });
     
-    // SavedNotes container (final note views will appear here).
+    // SavedNotes container will hold the final view notes.
     const savedNotesContainer = document.createElement('div');
     savedNotesContainer.id = 'savedNotes';
     container.parentNode.insertBefore(savedNotesContainer, container.nextSibling);
@@ -315,21 +332,17 @@ function createMarkerForNote(noteId, time, initialContent) {
       if (!video) return;
       const currentTime = video.currentTime;
       const currentTimeFormatted = formatTime(currentTime);
-      const noteId = Date.now().toString(); // Generate unique note ID
+      const noteId = Date.now().toString(); // unique identifier
       
-      // Create an inline note editor in savedNotes.
+      // Create an inline note editor.
       const inlineNote = createNoteEditor(noteId, currentTimeFormatted, "", false);
-      if (savedNotesContainer.firstChild) {
-        savedNotesContainer.insertBefore(inlineNote, savedNotesContainer.firstChild);
-      } else {
-        savedNotesContainer.appendChild(inlineNote);
-      }
+      savedNotesContainer.insertBefore(inlineNote, savedNotesContainer.firstChild);
       
-      // Also create a corresponding marker with a tooltip editor.
+      // Create a corresponding marker with tooltip editor.
       createMarkerForNote(noteId, currentTimeFormatted, "");
     });
     
-    // Global view note function for final (non-editable) note view.
+    // Global view note creation function for final (non-editable) note view.
     window.createNoteView = function(noteContent, noteTime, noteId) {
       const container = document.createElement('div');
       container.className = 'note-container';
@@ -349,7 +362,7 @@ function createMarkerForNote(noteId, time, initialContent) {
       const actionsDiv = document.createElement('div');
       actionsDiv.className = 'note-actions';
       
-      // Edit button: re-create an editable note with the same noteId.
+      // Edit button: switch the view to an inline editable note.
       const editBtn = document.createElement('button');
       editBtn.className = 'note-btn note-edit';
       editBtn.innerHTML = '✏️';
@@ -360,20 +373,31 @@ function createMarkerForNote(noteId, time, initialContent) {
       });
       actionsDiv.appendChild(editBtn);
       
-      // Delete button: remove the note view.
+      // Delete button: remove all note elements and markers with the same noteId.
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'note-btn note-delete';
       deleteBtn.innerHTML = '🗑️';
       deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        container.remove();
+        const id = container.dataset.noteId;
+        if (id) {
+          // Remove all elements (inline views, tooltips, etc.) with this noteId.
+          const allElems = document.querySelectorAll(`[data-note-id="${id}"]`);
+          allElems.forEach(el => el.remove());
+          // Remove any markers with this noteId.
+          const markers = document.querySelectorAll(`.ytp-marker[data-note-id="${id}"]`);
+          markers.forEach(el => el.remove());
+          // Remove from storage.
+          delete storage[id];
+          localStorage.setItem('ytMarkers', JSON.stringify(storage));
+        }
       });
       actionsDiv.appendChild(deleteBtn);
       
       header.appendChild(actionsDiv);
       container.appendChild(header);
       
-      // Content section with note details.
+      // Content section.
       const contentDiv = document.createElement('div');
       contentDiv.className = 'note-content';
       
@@ -430,3 +454,10 @@ function createMarkerForNote(noteId, time, initialContent) {
   addButtonToControls();
   setInterval(addButtonToControls, 1000);
 })();
+
+// --------------------------------------------------------------------------
+// Initialize Extension on Page Load
+// --------------------------------------------------------------------------
+document.addEventListener("DOMContentLoaded", function() {
+  console.log("YouTube Progress Bar Tools initialized");
+});

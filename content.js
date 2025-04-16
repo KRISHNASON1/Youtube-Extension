@@ -17,8 +17,8 @@ function timeToSeconds(timeStr) {
   return parts.length === 2 ? parseInt(parts[0]) * 60 + parseInt(parts[1]) : 0;
 }
 
-// Given a noteId, update all note editors (both inline and marker tooltip)
-// with the new time and content.
+// Update storage and all note editors (both inline and tooltip)
+// that share the same noteId with the new time and content.
 function updateAllNoteEditors(noteId, newTime, newContent) {
   storage[noteId] = { time: newTime, content: newContent };
   localStorage.setItem('ytMarkers', JSON.stringify(storage));
@@ -38,20 +38,24 @@ function updateAllNoteEditors(noteId, newTime, newContent) {
 // --------------------------------------------------------------------------
 // Create Note Editor Component
 // --------------------------------------------------------------------------
-// This function creates the interactive note editor element. It is used
-// both for the inline (savedNotes) version and for the marker tooltip version.
-// The 'isTooltip' flag indicates if the element is for a marker tooltip.
+// This function creates an interactive note editor element.
+// It is used for both the inline (savedNotes) and marker tooltip versions.
+// The parameter 'isTooltip' indicates if the element is for a marker tooltip.
 function createNoteEditor(noteId, time, content, isTooltip) {
   const container = document.createElement('div');
   container.dataset.noteId = noteId;
+  
   if (isTooltip) {
     container.className = 'ytp-marker-tooltip note-container';
     container.style.display = 'block';
+    // Prevent events in the tooltip from triggering other elements.
+    container.addEventListener('click', e => e.stopPropagation());
+    container.addEventListener('mousedown', e => e.stopPropagation());
   } else {
     container.className = 'note-container inline-editing';
   }
   
-  // Header with time and formatting toolbar
+  // --- Header: Time label and formatting toolbar ---
   const header = document.createElement('div');
   header.className = 'note-header';
   
@@ -59,7 +63,7 @@ function createNoteEditor(noteId, time, content, isTooltip) {
   timeSpan.className = 'note-time';
   timeSpan.textContent = time;
   
-  // Toolbar with formatting buttons and a Styles dropdown
+  // Toolbar with formatting buttons and a Styles dropdown.
   const toolbar = document.createElement('div');
   toolbar.className = 'note-toolbar';
   
@@ -143,7 +147,7 @@ function createNoteEditor(noteId, time, content, isTooltip) {
   header.appendChild(toolbar);
   container.appendChild(header);
   
-  // Contenteditable note editor
+  // --- Note Editor (contenteditable) ---
   const noteEditor = document.createElement('div');
   noteEditor.className = 'note-editor';
   noteEditor.setAttribute('contenteditable', 'true');
@@ -152,9 +156,9 @@ function createNoteEditor(noteId, time, content, isTooltip) {
   noteEditor.innerHTML = content;
   container.appendChild(noteEditor);
   
-  // Prevent propagation of events (so YouTube shortcuts are not triggered)
+  // Stop event propagation inside the note editor.
   ['mousedown', 'mouseup', 'click'].forEach(evt => {
-    noteEditor.addEventListener(evt, (e) => e.stopPropagation());
+    noteEditor.addEventListener(evt, e => e.stopPropagation());
   });
   noteEditor.addEventListener('keydown', e => e.stopPropagation(), true);
   noteEditor.addEventListener('keyup', e => e.stopPropagation(), true);
@@ -162,7 +166,7 @@ function createNoteEditor(noteId, time, content, isTooltip) {
     charCount.textContent = noteEditor.innerText.length;
   });
   
-  // Action buttons: Cancel and Save note.
+  // --- Action Buttons: Cancel and Save note ---
   const actions = document.createElement('div');
   actions.className = 'note-actions';
   
@@ -178,7 +182,7 @@ function createNoteEditor(noteId, time, content, isTooltip) {
   actions.appendChild(saveBtn);
   container.appendChild(actions);
   
-  // Cancel: If the note already exists (in storage), revert changes; otherwise, remove editor.
+  // Cancel: Revert content if already saved, otherwise remove editor.
   cancelBtn.addEventListener('click', () => {
     if (storage[noteId]) {
       noteEditor.innerHTML = storage[noteId].content;
@@ -187,14 +191,24 @@ function createNoteEditor(noteId, time, content, isTooltip) {
     }
   });
   
-  // Save: Validate non-empty content and update all editors sharing the same noteId.
-  saveBtn.addEventListener('click', () => {
+  // Save: Validate content then update all editors sharing the same noteId.
+  saveBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
     const newContent = noteEditor.innerHTML.trim();
     if (newContent === "") {
       alert("Note cannot be empty");
       return;
     }
     updateAllNoteEditors(noteId, time, newContent);
+    // If this editor is inline (in savedNotes), replace it with a final view note.
+    if (container.classList.contains('inline-editing')) {
+      const finalView = window.createNoteView(newContent, time, noteId);
+      container.parentNode.replaceChild(finalView, container);
+    }
+    // If this editor is from the tooltip, hide it.
+    if (container.classList.contains('ytp-marker-tooltip')) {
+      container.style.display = 'none';
+    }
   });
   
   return container;
@@ -210,14 +224,13 @@ function createMarkerForNote(noteId, time, initialContent) {
   const marker = document.createElement('div');
   marker.className = 'ytp-marker';
   marker.dataset.noteId = noteId;
-  // Position marker based on time (converted to seconds and expressed as a percentage)
   marker.style.left = `calc(${(timeToSeconds(time) / video.duration) * 100}% - 1.5px)`;
   
-  // Create the tooltip interactive note editor attached to the marker.
+  // Create the tooltip editor attached to the marker.
   const tooltip = createNoteEditor(noteId, time, initialContent, true);
   marker.appendChild(tooltip);
   
-  // Toggle the display of the tooltip on marker interactions.
+  // Toggle tooltip display on interactions.
   let isActive = false;
   marker.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -241,7 +254,7 @@ function createMarkerForNote(noteId, time, initialContent) {
 }
 
 // --------------------------------------------------------------------------
-// Custom UI Toolbar and Inline Note Creation (SavedNotes)
+// Inject Custom UI Toolbar (Single Instance)
 // --------------------------------------------------------------------------
 (function injectUIToolbar() {
   function createUI() {
@@ -251,6 +264,7 @@ function createMarkerForNote(noteId, time, initialContent) {
     const container = document.createElement('div');
     container.className = 'custom-ui-toolbar';
     
+    // Toolbar HTML: only one instance will be inserted.
     container.innerHTML = `
       <button id="createNoteButton" class="main-button">Create a new note</button>
       <div class="dropdown">
@@ -289,21 +303,21 @@ function createMarkerForNote(noteId, time, initialContent) {
       }
     });
     
-    // Saved notes container (for inline note editors)
+    // SavedNotes container (final note views will appear here).
     const savedNotesContainer = document.createElement('div');
     savedNotesContainer.id = 'savedNotes';
     container.parentNode.insertBefore(savedNotesContainer, container.nextSibling);
     
-    // "Create a new note" button event
+    // "Create a new note" button event.
     const createNoteButton = container.querySelector('#createNoteButton');
     createNoteButton.addEventListener('click', () => {
       const video = document.querySelector('video');
       if (!video) return;
-      const currentTimeSeconds = video.currentTime;
-      const currentTimeFormatted = formatTime(currentTimeSeconds);
-      const noteId = Date.now().toString(); // unique identifier
+      const currentTime = video.currentTime;
+      const currentTimeFormatted = formatTime(currentTime);
+      const noteId = Date.now().toString(); // Generate unique note ID
       
-      // Create inline note editor and add to savedNotes
+      // Create an inline note editor in savedNotes.
       const inlineNote = createNoteEditor(noteId, currentTimeFormatted, "", false);
       if (savedNotesContainer.firstChild) {
         savedNotesContainer.insertBefore(inlineNote, savedNotesContainer.firstChild);
@@ -311,16 +325,83 @@ function createMarkerForNote(noteId, time, initialContent) {
         savedNotesContainer.appendChild(inlineNote);
       }
       
-      // Create corresponding marker with tooltip editor
+      // Also create a corresponding marker with a tooltip editor.
       createMarkerForNote(noteId, currentTimeFormatted, "");
     });
+    
+    // Global view note function for final (non-editable) note view.
+    window.createNoteView = function(noteContent, noteTime, noteId) {
+      const container = document.createElement('div');
+      container.className = 'note-container';
+      if (noteId) {
+        container.dataset.noteId = noteId;
+      }
+      
+      // Header with time and action buttons.
+      const header = document.createElement('div');
+      header.className = 'note-header';
+      
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 'note-time';
+      timeSpan.textContent = noteTime || '00:00';
+      header.appendChild(timeSpan);
+      
+      const actionsDiv = document.createElement('div');
+      actionsDiv.className = 'note-actions';
+      
+      // Edit button: re-create an editable note with the same noteId.
+      const editBtn = document.createElement('button');
+      editBtn.className = 'note-btn note-edit';
+      editBtn.innerHTML = '✏️';
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const inlineNoteEditor = createNoteEditor(noteId, noteTime, noteContent, false);
+        container.parentNode.replaceChild(inlineNoteEditor, container);
+      });
+      actionsDiv.appendChild(editBtn);
+      
+      // Delete button: remove the note view.
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'note-btn note-delete';
+      deleteBtn.innerHTML = '🗑️';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        container.remove();
+      });
+      actionsDiv.appendChild(deleteBtn);
+      
+      header.appendChild(actionsDiv);
+      container.appendChild(header);
+      
+      // Content section with note details.
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'note-content';
+      
+      const headingEl = document.createElement('h3');
+      headingEl.className = 'note-title';
+      headingEl.textContent = 'Lecture Title';
+      contentDiv.appendChild(headingEl);
+      
+      const subheadingEl = document.createElement('p');
+      subheadingEl.className = 'note-subtitle';
+      subheadingEl.textContent = 'Subheading details';
+      contentDiv.appendChild(subheadingEl);
+      
+      const bodyDiv = document.createElement('div');
+      bodyDiv.className = 'note-body';
+      bodyDiv.innerHTML = noteContent;
+      contentDiv.appendChild(bodyDiv);
+      
+      container.appendChild(contentDiv);
+      return container;
+    };
   }
   
   createUI();
 })();
 
 // --------------------------------------------------------------------------
-// Existing Marker Button on YouTube Controls
+// Existing Marker Button in YouTube Controls
 // --------------------------------------------------------------------------
 (function() {
   const markerButton = document.createElement('button');
@@ -331,8 +412,8 @@ function createMarkerForNote(noteId, time, initialContent) {
   markerButton.addEventListener('click', () => {
     const video = document.querySelector('video');
     if (!video) return;
-    const currentTimeSeconds = video.currentTime;
-    const currentTimeFormatted = formatTime(currentTimeSeconds);
+    const currentTime = video.currentTime;
+    const currentTimeFormatted = formatTime(currentTime);
     const noteId = Date.now().toString();
     createMarkerForNote(noteId, currentTimeFormatted, "");
   });
@@ -348,318 +429,4 @@ function createMarkerForNote(noteId, time, initialContent) {
   
   addButtonToControls();
   setInterval(addButtonToControls, 1000);
-})();
-
-
-// ********** Injection for Custom UI Toolbar and Inline Note Creation **********
-(function() {
-    // Creates an inline note editor (for the custom UI toolbar).
-    function createInlineEditableNote() {
-       const noteContainer = document.createElement('div');
-       noteContainer.className = 'note-container inline-editing';
-       
-       // --- Header: Dynamic Time and Formatting Toolbar ---
-       const header = document.createElement('div');
-       header.className = 'note-header';
-       
-       const timeSpan = document.createElement('span');
-       timeSpan.className = 'note-time';
-       const video = document.querySelector('video');
-       const currentTime = video ? video.currentTime : 0;
-       timeSpan.textContent = formatTime(currentTime);
-       header.appendChild(timeSpan);
-       
-       const toolbar = document.createElement('div');
-       toolbar.className = 'note-toolbar';
-       
-       const stylesBtn = document.createElement('button');
-       stylesBtn.className = 'note-btn note-styles';
-       stylesBtn.textContent = 'Styles ▼';
-       
-       const boldBtn = document.createElement('button');
-       boldBtn.className = 'note-btn note-bold';
-       boldBtn.textContent = 'B';
-       
-       const italicBtn = document.createElement('button');
-       italicBtn.className = 'note-btn note-italic';
-       italicBtn.textContent = 'I';
-       
-       const listBtn = document.createElement('button');
-       listBtn.className = 'note-btn note-list';
-       listBtn.textContent = '•';
-       
-       const codeBtn = document.createElement('button');
-       codeBtn.className = 'note-btn note-code';
-       codeBtn.textContent = '<>';
-       
-       const charCount = document.createElement('span');
-       charCount.className = 'note-char-count';
-       charCount.textContent = '0';
-       
-       const stylesDropdown = document.createElement('div');
-       stylesDropdown.className = 'note-styles-dropdown';
-       stylesDropdown.style.display = 'none';
-       
-       const optionNormal = document.createElement('div');
-       optionNormal.textContent = 'Normal';
-       const optionQuote = document.createElement('div');
-       optionQuote.textContent = 'Quote';
-       const optionHeading4 = document.createElement('div');
-       optionHeading4.textContent = 'Heading 4';
-       
-       stylesDropdown.appendChild(optionNormal);
-       stylesDropdown.appendChild(optionQuote);
-       stylesDropdown.appendChild(optionHeading4);
-       
-       toolbar.appendChild(stylesBtn);
-       toolbar.appendChild(boldBtn);
-       toolbar.appendChild(italicBtn);
-       toolbar.appendChild(listBtn);
-       toolbar.appendChild(codeBtn);
-       toolbar.appendChild(charCount);
-       toolbar.appendChild(stylesDropdown);
-       
-       [stylesBtn, boldBtn, italicBtn, listBtn, codeBtn].forEach(btn => {
-           btn.addEventListener('mousedown', e => e.preventDefault());
-       });
-       
-       stylesBtn.addEventListener('click', (e) => {
-           e.stopPropagation();
-           stylesDropdown.style.display = (stylesDropdown.style.display === 'none') ? 'block' : 'none';
-       });
-       optionNormal.addEventListener('click', (e) => {
-           e.stopPropagation();
-           document.execCommand('formatBlock', false, 'p');
-           stylesDropdown.style.display = 'none';
-           editor.focus();
-       });
-       optionQuote.addEventListener('click', (e) => {
-           e.stopPropagation();
-           document.execCommand('formatBlock', false, 'blockquote');
-           stylesDropdown.style.display = 'none';
-           editor.focus();
-       });
-       optionHeading4.addEventListener('click', (e) => {
-           e.stopPropagation();
-           document.execCommand('formatBlock', false, 'h4');
-           stylesDropdown.style.display = 'none';
-           editor.focus();
-       });
-       
-       header.appendChild(toolbar);
-       noteContainer.appendChild(header);
-       
-       // --- Editable Note Area ---
-       const editor = document.createElement('div');
-       editor.className = 'note-editor';
-       editor.setAttribute('contenteditable', 'true');
-       editor.setAttribute('spellcheck', 'false');
-       editor.style.outline = 'none';
-       noteContainer.appendChild(editor);
-       
-       editor.addEventListener('keydown', e => e.stopPropagation(), true);
-       editor.addEventListener('keyup', e => e.stopPropagation(), true);
-       
-       editor.addEventListener('input', () => {
-           charCount.textContent = editor.innerText.length;
-       });
-       
-       // --- Action Buttons ---
-       const actionsDiv = document.createElement('div');
-       actionsDiv.className = 'note-edit-actions';
-       
-       const cancelBtn = document.createElement('button');
-       cancelBtn.className = 'note-btn note-cancel';
-       cancelBtn.textContent = 'Cancel';
-       
-       const saveBtn = document.createElement('button');
-       saveBtn.className = 'note-btn note-save';
-       saveBtn.textContent = 'Save note';
-       
-       actionsDiv.appendChild(cancelBtn);
-       actionsDiv.appendChild(saveBtn);
-       noteContainer.appendChild(actionsDiv);
-       
-       cancelBtn.addEventListener('click', () => {
-           noteContainer.remove();
-       });
-       
-       return noteContainer;
-    }
-    
-    function injectUIToolbar() {
-      const target = document.querySelector('.watch-active-metadata.style-scope.ytd-watch-flexy');
-      if (!target) {
-        return setTimeout(injectUIToolbar, 1000);
-      }
-      
-      const container = document.createElement('div');
-      container.className = 'custom-ui-toolbar';
-      
-      container.innerHTML = `
-        <button id="createNoteButton" class="main-button">Create a new note</button>
-        <div class="dropdown">
-          <button class="dropdown-toggle">All Lectures</button>
-          <div class="dropdown-menu">
-            <div class="dropdown-item">All Lectures</div>
-            <div class="dropdown-item">Current Lecture</div>
-          </div>
-        </div>
-        <div class="dropdown">
-          <button class="dropdown-toggle">Sort by most recent</button>
-          <div class="dropdown-menu">
-            <div class="dropdown-item">Sort by most recent</div>
-            <div class="dropdown-item">Sort by oldest</div>
-          </div>
-        </div>
-      `;
-      
-      target.parentNode.insertBefore(container, target.nextSibling);
-      
-      container.querySelectorAll('.dropdown-toggle').forEach(toggle => {
-        toggle.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const menu = toggle.nextElementSibling;
-          container.querySelectorAll('.dropdown-menu').forEach(m => {
-            if (m !== menu) m.style.display = 'none';
-          });
-          menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
-        });
-      });
-      document.addEventListener('click', (e) => {
-        if (!e.target.closest('.dropdown')) {
-          container.querySelectorAll('.dropdown-menu').forEach(menu => {
-            menu.style.display = 'none';
-          });
-        }
-      });
-      
-      const savedNotesContainer = document.createElement('div');
-      savedNotesContainer.id = 'savedNotes';
-      container.parentNode.insertBefore(savedNotesContainer, container.nextSibling);
-      
-      const createNoteButton = container.querySelector('#createNoteButton');
-      createNoteButton.addEventListener('click', () => {
-          const video = document.querySelector('video');
-          if (!video) return;
-          const currentTime = video.currentTime;
-          
-          // Create a marker on the progress bar.
-          const marker = document.createElement('div');
-          marker.className = 'ytp-marker';
-          marker.style.left = `calc(${(currentTime / video.duration) * 100}% - 1.5px)`;
-          const progressBar = document.querySelector('.ytp-progress-bar');
-          progressBar.appendChild(marker);
-          
-          // Create an inline editable note.
-          const newEditableNote = createInlineEditableNote();
-          const headerTime = newEditableNote.querySelector('.note-time');
-          headerTime.textContent = formatTime(currentTime);
-          
-          // Link marker and note with a unique id.
-          const uniqueId = Date.now();
-          newEditableNote.dataset.noteId = uniqueId;
-          marker.dataset.noteId = uniqueId;
-          
-          if (savedNotesContainer.firstChild) {
-              savedNotesContainer.insertBefore(newEditableNote, savedNotesContainer.firstChild);
-          } else {
-              savedNotesContainer.appendChild(newEditableNote);
-          }
-          
-          // On save, update storage, replace inline note with full view note,
-          // and update the marker’s tooltip with a full note view.
-          const saveButton = newEditableNote.querySelector('.note-save');
-          saveButton.addEventListener('click', () => {
-              const noteEditor = newEditableNote.querySelector('.note-editor');
-              const noteContent = noteEditor.innerHTML.trim();
-              if (noteContent === '') {
-                  alert('Note cannot be empty');
-                  return;
-              }
-              storage[headerTime.textContent] = noteContent;
-              localStorage.setItem('ytMarkers', JSON.stringify(storage));
-              
-              // Create full note view for savedNotes.
-              const viewNote = window.createNoteView(noteContent, headerTime.textContent);
-              newEditableNote.parentNode.replaceChild(viewNote, newEditableNote);
-              
-              // Update the marker's tooltip to show the full note view.
-              let tooltip = marker.querySelector('.ytp-marker-tooltip');
-              if (!tooltip) {
-                  tooltip = document.createElement('div');
-                  tooltip.className = 'ytp-marker-tooltip note-container';
-                  marker.appendChild(tooltip);
-              }
-              tooltip.innerHTML = '';
-              tooltip.appendChild(window.createNoteView(noteContent, headerTime.textContent));
-          });
-      });
-      
-      // Global view note creation function.
-      window.createNoteView = function(noteContent, noteTime) {
-           const container = document.createElement('div');
-           container.className = 'note-container';
-           
-           // Header with time and action buttons.
-           const header = document.createElement('div');
-           header.className = 'note-header';
-           
-           const timeSpan = document.createElement('span');
-           timeSpan.className = 'note-time';
-           timeSpan.textContent = noteTime || '3:05';
-           header.appendChild(timeSpan);
-           
-           const actionsDiv = document.createElement('div');
-           actionsDiv.className = 'note-actions';
-           
-           const editBtn = document.createElement('button');
-           editBtn.className = 'note-btn note-edit';
-           editBtn.innerHTML = '✏️';
-           editBtn.addEventListener('click', (e) => {
-               e.stopPropagation();
-               const inlineNote = createInlineEditableNote();
-               inlineNote.querySelector('.note-editor').innerHTML = noteContent;
-               inlineNote.querySelector('.note-time').textContent = noteTime;
-               container.parentNode.replaceChild(inlineNote, container);
-           });
-           actionsDiv.appendChild(editBtn);
-           
-           const deleteBtn = document.createElement('button');
-           deleteBtn.className = 'note-btn note-delete';
-           deleteBtn.innerHTML = '🗑️';
-           deleteBtn.addEventListener('click', (e) => {
-               e.stopPropagation();
-               container.remove();
-           });
-           actionsDiv.appendChild(deleteBtn);
-           
-           header.appendChild(actionsDiv);
-           container.appendChild(header);
-           
-           // Content section with note details.
-           const contentDiv = document.createElement('div');
-           contentDiv.className = 'note-content';
-           
-           const headingEl = document.createElement('h3');
-           headingEl.className = 'note-title';
-           headingEl.textContent = 'Lecture Title';
-           contentDiv.appendChild(headingEl);
-           
-           const subheadingEl = document.createElement('p');
-           subheadingEl.className = 'note-subtitle';
-           subheadingEl.textContent = 'Subheading details';
-           contentDiv.appendChild(subheadingEl);
-           
-           const bodyDiv = document.createElement('div');
-           bodyDiv.className = 'note-body';
-           bodyDiv.innerHTML = noteContent;
-           contentDiv.appendChild(bodyDiv);
-           
-           container.appendChild(contentDiv);
-           return container;
-      };
-    }
-    
-    injectUIToolbar();
 })();

@@ -82,26 +82,23 @@
   border-color: yellow !important;
 }
 
-/* Add to styles.css */
 .ytp-marker-tooltip {
   position: absolute;
-  bottom: 25px;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: 35px;
   width: 500px;
   background: rgba(0,0,0,0.8);
   border-radius: 3px;
   padding: 10px;
   display: none;
-  pointer-events: auto; 
+  pointer-events: auto;
   z-index: 2147483647 !important;
-  bottom: 35px; /* Increased distance from marker */
-  transform: translateX(-50%) translateY(10px);
   transition: transform 0.2s ease, opacity 0.2s ease;
   opacity: 0;
-  pointer-events: none; 
-  position: absolute;
-    will-change: transform, opacity;
+}
+.ytp-marker.active .ytp-marker-tooltip,
+.ytp-marker:hover .ytp-marker-tooltip {
+  display: block;
+  opacity: 1;
 }
 
 .ytp-marker.active .ytp-marker-tooltip {
@@ -179,20 +176,22 @@
 
 /* ===== New Note Interface ===== */
 /* ===== Note-Taking Interface for Marker Tooltip ===== */
-.note-container {
-  /* Increase width and height */
+/* replace all .note-container rules with: */
+.saved-note-container {
   width: 480px;
   min-height: 280px;
-
-  background: #FFFFFF;
-  padding: 20px; /* Increase padding a bit */
+  background: #FFF;
+  padding: 20px;
   box-sizing: border-box;
   border-radius: 4px;
   font-family: Arial, sans-serif;
-  position: absolute;
+  position: relative !important;
   z-index: 2147483647 !important;
-  /* box-shadow: 0 2px 6px rgba(0,0,0,0.15); */
+  /* remove any transform/opacity overrides */
+  transform: none !important;
+  opacity: 1 !important;
 }
+
 
 
 /* Header / Top Bar */

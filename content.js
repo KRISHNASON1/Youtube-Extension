@@ -214,51 +214,99 @@ function createMarkerForNote(noteId, time, initialContent) {
   const video = document.querySelector('video');
   if (!video) return;
   const progressBar = document.querySelector('.ytp-progress-bar');
+
+  // Create the marker
   const marker = document.createElement('div');
   marker.className = 'ytp-marker';
   marker.dataset.noteId = noteId;
-  marker.style.left = `calc(${(timeToSeconds(time) / video.duration)*100}% - 1.5px)`;
+  marker.style.left = `calc(${(timeToSeconds(time) / video.duration) * 100}% - 1.5px)`;
 
-  // Build tooltip
+  // Create the tooltip
   const tooltip = createNoteEditor(noteId, time, initialContent, true);
   tooltip.style.position = 'absolute';
-  tooltip.style.bottom = `${progressBar.clientHeight + 10}px`;
+  tooltip.style.bottom = `${progressBar.clientHeight + 8}px`;
   tooltip.style.display = 'none';
   progressBar.appendChild(tooltip);
 
+  // Reposition tooltip so it never goes off‐screen
   function positionTooltip() {
     const barW = progressBar.clientWidth;
     const tipW = tooltip.offsetWidth;
-    const center = marker.offsetLeft + marker.offsetWidth/2;
-    let left = center - tipW/2;
-    if (left < 0) left = 0;
-    if (left + tipW > barW) left = barW - tipW;
+    const center = marker.offsetLeft + marker.offsetWidth / 2;
+    let left = center - tipW / 2;
+    left = Math.max(0, Math.min(left, barW - tipW));
     tooltip.style.left = `${left}px`;
   }
 
   let isActive = false;
+  let hideTimer = null;
+
+  function clearHide() {
+    if (hideTimer) {
+      clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+  }
+
+  function scheduleHide() {
+    clearHide();
+    hideTimer = setTimeout(() => {
+      if (
+        !marker.matches(':hover') &&
+        !tooltip.matches(':hover') &&
+        !isActive
+      ) {
+        tooltip.style.display = 'none';
+      }
+    }, 100);
+  }
+
+  // Toggle on click
   marker.addEventListener('click', e => {
     e.stopPropagation();
     isActive = !isActive;
     if (isActive) {
-      positionTooltip();
       tooltip.style.display = 'block';
+      tooltip.style.visibility = 'hidden';
+      positionTooltip();
+      tooltip.style.visibility = '';
       tooltip.querySelector('.note-editor').focus();
     } else {
       tooltip.style.display = 'none';
     }
   });
-  marker.addEventListener('mouseenter', () => {
-    positionTooltip();
+
+  // Show on hover
+  marker.addEventListener('mouseenter', e => {
+    e.stopPropagation();
+    clearHide();
     tooltip.style.display = 'block';
-  });
-  marker.addEventListener('mouseleave', () => {
-    if (!isActive) tooltip.style.display = 'none';
+    tooltip.style.visibility = 'hidden';
+    positionTooltip();
+    tooltip.style.visibility = '';
   });
 
+  // Hide when leaving marker or tooltip
+  marker.addEventListener('mouseleave', scheduleHide);
+  tooltip.addEventListener('mouseleave', scheduleHide);
+
+  // Cancel hide if entering either element
+  marker.addEventListener('mouseenter', clearHide);
+  tooltip.addEventListener('mouseenter', clearHide);
+
+  // Hide on click outside
+  document.addEventListener('click', e => {
+    if (!marker.contains(e.target) && !tooltip.contains(e.target)) {
+      isActive = false;
+      tooltip.style.display = 'none';
+    }
+  });
+
+  // Finally, add the marker to the bar
   progressBar.appendChild(marker);
   return marker;
 }
+
 
 // --------------------------------------------------------------------------
 // Inject UI Toolbar & Inline Note Creation

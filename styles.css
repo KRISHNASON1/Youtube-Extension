@@ -95,11 +95,11 @@
   transition: transform 0.2s ease, opacity 0.2s ease;
   opacity: 0;
 }
-.ytp-marker.active .ytp-marker-tooltip,
+/* .ytp-marker.active .ytp-marker-tooltip,
 .ytp-marker:hover .ytp-marker-tooltip {
   display: block;
   opacity: 1;
-}
+} */
 
 .ytp-marker.active .ytp-marker-tooltip {
   display: block;
@@ -301,7 +301,9 @@
 /* Increase the note container size */
 .note-container {
   width: 480px;       /* Was 400px */
-  height: 200px;      /* Was ~240px */
+  min-height: 200px;   
+  height: auto;
+  overflow: visible;
   background: #FFFFFF;
   padding: 16px;
   box-sizing: border-box;
@@ -513,7 +515,6 @@
 #savedNotes .note-container {
   position: relative !important;
   width: 100% !important;
-  height: auto !important;
   margin-bottom: 10px;
   top: 0;
   left: 0;

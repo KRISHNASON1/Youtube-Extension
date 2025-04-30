@@ -451,10 +451,13 @@ function createMarkerForNote(noteId, time, initialContent) {
       subheadingEl.textContent = 'Subheading details';
       contentDiv.appendChild(subheadingEl);
 
+      
+
       const bodyDiv = document.createElement('div');
       bodyDiv.className = 'note-body';
-      bodyDiv.innerHTML = noteContent;
+      bodyDiv.innerHTML = noteContent || '<br>'; 
       contentDiv.appendChild(bodyDiv);
+
 
       container.appendChild(contentDiv);
       return container;
@@ -473,14 +476,28 @@ function createMarkerForNote(noteId, time, initialContent) {
   markerButton.title = 'Add timestamp marker';
   markerButton.innerHTML = `<svg viewBox="0 0 24 24"><path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z"/></svg>`;
 
-  markerButton.addEventListener('click', () => {
-    const video = document.querySelector('video');
-    if (!video) return;
-    const t = video.currentTime;
-    const tf = formatTime(t);
-    const noteId = Date.now().toString();
-    createMarkerForNote(noteId, tf, '');
-  });
+// Modify the marker button click handler in the "Existing Marker Button" section
+markerButton.addEventListener('click', () => {
+  const video = document.querySelector('video');
+  if (!video) return;
+  const t = video.currentTime;
+  const tf = formatTime(t);
+  const noteId = Date.now().toString();
+  
+  // Create the marker and tooltip
+  createMarkerForNote(noteId, tf, '');
+  
+  // Immediately create and insert the saved note container
+  const savedNotesContainer = document.getElementById('savedNotes');
+  if (savedNotesContainer) {
+    const savedNote = window.createNoteView('', tf, noteId);
+    savedNotesContainer.insertBefore(savedNote, savedNotesContainer.firstChild);
+  }
+  
+  // Initialize empty entry in storage
+  storage[noteId] = { time: tf, content: '' };
+  localStorage.setItem('ytMarkers', JSON.stringify(storage));
+});
 
   function addButtonToControls() {
     const controls = document.querySelector('.ytp-left-controls');

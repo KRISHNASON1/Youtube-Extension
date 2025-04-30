@@ -228,7 +228,7 @@ function createMarkerForNote(noteId, time, initialContent) {
   tooltip.style.display = 'none';
   progressBar.appendChild(tooltip);
 
-  // Reposition tooltip so it never goes off‐screen
+  // Reposition tooltip so it never goes off-screen
   function positionTooltip() {
     const barW = progressBar.clientWidth;
     const tipW = tooltip.offsetWidth;
@@ -238,30 +238,18 @@ function createMarkerForNote(noteId, time, initialContent) {
     tooltip.style.left = `${left}px`;
   }
 
-  let isActive = false;
-  let hideTimer = null;
-
-  function clearHide() {
-    if (hideTimer) {
-      clearTimeout(hideTimer);
-      hideTimer = null;
-    }
-  }
-
+  let isActive = false, hideTimer = null;
+  function clearHide() { clearTimeout(hideTimer); hideTimer = null; }
   function scheduleHide() {
     clearHide();
     hideTimer = setTimeout(() => {
-      if (
-        !marker.matches(':hover') &&
-        !tooltip.matches(':hover') &&
-        !isActive
-      ) {
+      if (!marker.matches(':hover') && !tooltip.matches(':hover') && !isActive) {
         tooltip.style.display = 'none';
       }
     }, 100);
   }
 
-  // Toggle on click
+  // Click toggles pin
   marker.addEventListener('click', e => {
     e.stopPropagation();
     isActive = !isActive;
@@ -276,7 +264,7 @@ function createMarkerForNote(noteId, time, initialContent) {
     }
   });
 
-  // Show on hover
+  // Hover shows
   marker.addEventListener('mouseenter', e => {
     e.stopPropagation();
     clearHide();
@@ -286,15 +274,15 @@ function createMarkerForNote(noteId, time, initialContent) {
     tooltip.style.visibility = '';
   });
 
-  // Hide when leaving marker or tooltip
+  // Hide when leaving
   marker.addEventListener('mouseleave', scheduleHide);
   tooltip.addEventListener('mouseleave', scheduleHide);
 
-  // Cancel hide if entering either element
+  // Cancel hide on re-enter
   marker.addEventListener('mouseenter', clearHide);
   tooltip.addEventListener('mouseenter', clearHide);
 
-  // Hide on click outside
+  // Hide on outside click
   document.addEventListener('click', e => {
     if (!marker.contains(e.target) && !tooltip.contains(e.target)) {
       isActive = false;
@@ -302,10 +290,14 @@ function createMarkerForNote(noteId, time, initialContent) {
     }
   });
 
-  // Finally, add the marker to the bar
+  // Add the marker, then immediately simulate a click
   progressBar.appendChild(marker);
+  marker.click();  // ← uses your marker’s own click logic to open the tooltip
+
   return marker;
 }
+
+
 
 
 // --------------------------------------------------------------------------

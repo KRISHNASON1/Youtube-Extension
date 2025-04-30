@@ -21,12 +21,42 @@ function timeToSeconds(timeStr) {
 function updateAllNoteEditors(noteId, newTime, newContent) {
   storage[noteId] = { time: newTime, content: newContent };
   localStorage.setItem('ytMarkers', JSON.stringify(storage));
-  const editors = document.querySelectorAll(`[data-note-id="${noteId}"]`);
-  editors.forEach(container => {
-    const noteEditor = container.querySelector('.note-editor');
-    if (noteEditor) noteEditor.innerHTML = newContent;
-    const timeSpan = container.querySelector('.note-time');
-    if (timeSpan) timeSpan.textContent = newTime;
+
+  // Force DOM refresh before querying elements
+  requestAnimationFrame(() => {
+    const elements = document.querySelectorAll(`[data-note-id="${noteId}"]`);
+    
+    elements.forEach(container => {
+      const contentHolders = container.querySelectorAll('.note-editor, .note-body');
+      contentHolders.forEach(el => {
+        if (el.innerHTML !== newContent) el.innerHTML = newContent;
+      });
+      // Update all editor instances (including nested ones)
+      const editors = container.querySelectorAll('.note-editor, .note-body');
+      editors.forEach(editor => {
+        if (editor.innerHTML !== newContent) {
+          editor.innerHTML = newContent;
+        }
+      });
+
+      // Force-update time displays
+      const timeElements = container.querySelectorAll('.note-time');
+      timeElements.forEach(el => {
+        if (el.textContent !== newTime) el.textContent = newTime;
+      });
+
+      // Special case for contenteditable elements
+      const activeEditor = container.querySelector('.note-editor[contenteditable="true"]');
+      if (activeEditor && activeEditor.innerHTML !== newContent) {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        activeEditor.innerHTML = newContent;
+        range.selectNodeContents(activeEditor);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    });
   });
 }
 
@@ -364,7 +394,7 @@ function createMarkerForNote(noteId, time, initialContent) {
     window.createNoteView = function(noteContent, noteTime, noteId) {
       const container = document.createElement('div');
       container.className = 'saved-note-container';
-      if (noteId) container.dataset.noteId = noteId;
+      container.dataset.noteId = noteId; // Always set the ID
 
       const header = document.createElement('div');
       header.className = 'note-header';
@@ -382,7 +412,13 @@ function createMarkerForNote(noteId, time, initialContent) {
       editBtn.textContent = '✏️';
       editBtn.addEventListener('click', e => {
         e.stopPropagation();
-        const editor = createNoteEditor(noteId, noteTime, noteContent, false);
+        const currentData = storage[noteId] || { time: '00:00', content: '' };
+        const editor = createNoteEditor(
+          noteId, 
+          currentData.time,  // Use storage time
+          currentData.content,  // Use storage content
+          false
+        );
         container.parentNode.replaceChild(editor, container);
       });
       actionsDiv.appendChild(editBtn);

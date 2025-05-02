@@ -150,10 +150,27 @@ function createNoteEditor(noteId, time, content, isTooltip) {
     document.execCommand('italic', false, null);
     noteEditor.focus();
   });
+// In the createNoteEditor function, update the list button event listener:
   listBtn.addEventListener('click', e => {
     e.stopPropagation();
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    
+    // Save current selection
+    const range = selection.getRangeAt(0);
+    
+    // Execute list command
     document.execCommand('insertUnorderedList', false, null);
+
+    // Restore selection and focus
+    selection.removeAllRanges();
+    selection.addRange(range);
     noteEditor.focus();
+    
+    // Force redraw for immediate visual feedback
+    noteEditor.style.display = 'none';
+    noteEditor.offsetHeight; // Trigger reflow
+    noteEditor.style.display = 'block';
   });
   codeBtn.addEventListener('click', e => {
     e.stopPropagation();

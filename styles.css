@@ -527,3 +527,28 @@
   width: 100%;
 }
   
+/* styles.css - Add these rules */
+.note-editor ul {
+  list-style-type: disc;
+  padding-left: 20px;
+  margin: 4px 0;
+}
+
+.note-editor li {
+  margin-left: 8px;
+}
+
+/* styles.css - Update note editor rules */
+.note-editor {
+  /* ... existing styles ... */
+  line-height: 1.5;
+  font-family: Arial, sans-serif !important; /* Force consistent font */
+}
+
+/* Ensure proper inheritance of styles */
+.note-editor * {
+  font-family: inherit !important;
+  font-size: inherit !important;
+  color: inherit !important;
+}
+

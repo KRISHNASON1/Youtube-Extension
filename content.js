@@ -254,7 +254,7 @@ function createMarkerForNote(noteId, time, initialContent) {
   // Create the tooltip
   const tooltip = createNoteEditor(noteId, time, initialContent, true);
   tooltip.style.position = 'absolute';
-  tooltip.style.bottom = `${progressBar.clientHeight + 8}px`;
+  tooltip.style.bottom = `${progressBar.clientHeight + 12}px`;
   tooltip.style.display = 'none';
   progressBar.appendChild(tooltip);
 

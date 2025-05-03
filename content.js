@@ -468,7 +468,18 @@ function createMarkerForNote(noteId, time, initialContent) {
       const inline = createNoteEditor(noteId, timeFormatted, '', false);
       savedNotesContainer.insertBefore(inline, savedNotesContainer.firstChild);
       createMarkerForNote(noteId, timeFormatted, '');
+      storage[noteId] = {
+        time: timeFormatted,
+        content: '',
+        title: getVideoTitle() // Store title at creation
+      };
+      localStorage.setItem('ytMarkers', JSON.stringify(storage));
     });
+
+    function getVideoTitle() {
+      const titleEl = document.querySelector('h1.style-scope.ytd-watch-metadata yt-formatted-string');
+      return titleEl?.textContent || 'Untitled';
+    }
 
     // Final view (non-editable) uses .saved-note-container
     window.createNoteView = function(noteContent, noteTime, noteId) {
@@ -523,12 +534,11 @@ function createMarkerForNote(noteId, time, initialContent) {
 
       const headingEl = document.createElement('h3');
       headingEl.className = 'note-title';
-      headingEl.textContent = 'Lecture Title';
+      headingEl.textContent = storage[noteId]?.title || getVideoTitle();
       contentDiv.appendChild(headingEl);
 
       const subheadingEl = document.createElement('p');
       subheadingEl.className = 'note-subtitle';
-      subheadingEl.textContent = 'Subheading details';
       contentDiv.appendChild(subheadingEl);
 
       
@@ -575,7 +585,12 @@ markerButton.addEventListener('click', () => {
   }
   
   // Initialize empty entry in storage
-  storage[noteId] = { time: tf, content: '' };
+   // Initialize entry with title
+   storage[noteId] = { 
+    time: tf, 
+    content: '', 
+    title: getVideoTitle() // Store title at creation
+  };
   localStorage.setItem('ytMarkers', JSON.stringify(storage));
 });
 

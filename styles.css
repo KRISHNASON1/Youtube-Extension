@@ -552,3 +552,42 @@
   color: inherit !important;
 }
 
+/* Add to styles.css */
+/* ===== Styles Dropdown Positioning ===== */
+.note-styles-dropdown {
+  position: absolute;
+  top: calc(100% + 5px); /* Position below button */
+  left: 0;
+  background: #ffffff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  z-index: 1000;
+  min-width: 120px;
+}
+
+/* ===== Quote Styling ===== */
+.note-editor blockquote {
+  display: block;
+  margin: 10px 0;
+  padding: 8px 12px;
+  color: #666;
+  font-size: 1.1em;
+  border-left: 4px solid #3b82f6;
+  background-color: #f8fafc;
+  border-radius: 2px;
+}
+
+/* ===== Heading 4 Styling ===== */
+.note-editor h4 {
+  font-size: 1.3em;
+  font-family: 'Roboto', Arial, sans-serif;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 12px 0;
+}
+
+/* ===== Dropdown Item Hover ===== */
+.note-styles-dropdown div:hover {
+  background-color: #f1f5f9;
+}

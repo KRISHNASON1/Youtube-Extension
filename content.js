@@ -115,29 +115,60 @@ function createNoteEditor(noteId, time, content, isTooltip) {
   stylesDropdown.className = 'note-styles-dropdown';
   stylesDropdown.style.display = 'none';
 
-  ['Normal','Quote','Heading 4'].forEach(text => {
-    const opt = document.createElement('div');
-    opt.textContent = text;
-    opt.addEventListener('click', e => {
-      e.stopPropagation();
-      let block = 'p';
-      if (text === 'Quote') block = 'blockquote';
-      if (text === 'Heading 4') block = 'h4';
-      document.execCommand('formatBlock', false, block);
-      stylesDropdown.style.display = 'none';
-      noteEditor.focus();
-    });
-    stylesDropdown.appendChild(opt);
-  });
-
-  [stylesBtn, boldBtn, italicBtn, listBtn, codeBtn].forEach(btn => {
-    btn.addEventListener('mousedown', e => e.preventDefault());
-  });
-  stylesBtn.addEventListener('click', e => {
+// Update the styles dropdown creation in createNoteEditor
+['Normal','Quote','Heading 4'].forEach(text => {
+  const opt = document.createElement('div');
+  opt.textContent = text;
+  opt.style.padding = '8px 12px';
+  opt.style.fontSize = '14px';
+  opt.style.cursor = 'pointer';
+  
+  opt.addEventListener('click', e => {
     e.stopPropagation();
-    stylesDropdown.style.display =
-      stylesDropdown.style.display === 'none' ? 'block' : 'none';
+    let block = 'p';
+    
+    if (text === 'Quote') {
+      block = 'blockquote';
+      // Add additional quote formatting
+      document.execCommand('formatBlock', false, block);
+      document.execCommand('foreColor', false, '#64748b');
+      document.execCommand('fontSize', false, '4');
+    } 
+    else if (text === 'Heading 4') {
+      block = 'h4';
+      // Add heading-specific formatting
+      document.execCommand('formatBlock', false, block);
+      document.execCommand('fontSize', false, '5');
+      document.execCommand('foreColor', false, '#1e293b');
+    } 
+    else {
+      // Reset to normal
+      document.execCommand('formatBlock', false, 'p');
+      document.execCommand('removeFormat');
+    }
+
+    stylesDropdown.style.display = 'none';
+    noteEditor.focus();
   });
+  
+  stylesDropdown.appendChild(opt);
+});
+
+// Update the stylesBtn event listener to properly position dropdown
+stylesBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  const rect = stylesBtn.getBoundingClientRect();
+  stylesDropdown.style.display = 
+    stylesDropdown.style.display === 'none' ? 'block' : 'none';
+  
+  // Position dropdown relative to button
+  stylesDropdown.style.left = '0';
+  stylesDropdown.style.top = `${rect.height + 5}px`;
+});
+
+
+
+
 
   // ——— Wire up formatting:
   boldBtn.addEventListener('click', e => {
@@ -195,6 +226,8 @@ function createNoteEditor(noteId, time, content, isTooltip) {
   noteEditor.innerHTML = content;
   container.appendChild(noteEditor);
 
+
+
   ['mousedown','mouseup','click'].forEach(evt => {
     noteEditor.addEventListener(evt, e => e.stopPropagation());
   });
@@ -205,6 +238,36 @@ function createNoteEditor(noteId, time, content, isTooltip) {
     charCount.textContent = noteEditor.innerText.length;
   });
 
+// Update the noteEditor keydown handler in createNoteEditor
+noteEditor.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    
+    const range = selection.getRangeAt(0);
+    const parentBlock = range.commonAncestorContainer.closest('blockquote, h4, p');
+    
+    // Check if we're in a formatted block
+    if (parentBlock?.closest('blockquote, h4')) {
+      e.preventDefault();
+      
+      // Create new paragraph after formatted block
+      const formattedBlock = parentBlock.closest('blockquote, h4');
+      const newParagraph = document.createElement('p');
+      newParagraph.innerHTML = '<br>';
+      
+      // Insert after formatted block
+      formattedBlock.parentNode.insertBefore(newParagraph, formattedBlock.nextSibling);
+      
+      // Move cursor
+      const newRange = document.createRange();
+      newRange.selectNodeContents(newParagraph);
+      newRange.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    }
+  }
+});
   // ——— Actions
   const actions = document.createElement('div');
   actions.className = 'note-actions';

@@ -1,4 +1,5 @@
 // content.js
+// to work on on/off button
 const storage = JSON.parse(localStorage.getItem('ytMarkers')) || {};
 
 // --------------------------------------------------------------------------

@@ -1,15 +1,24 @@
-
 {
   "manifest_version": 3,
-  "permissions": ["storage"],
-  "name": "YouTube Progress Bar Tools",
-  "version": "1.1",
-  "description": "Custom YouTube progress bar markers",
+  "name": "YouTube Progress Bar Notes",
+  "version": "1.2",
+  "description": "Custom YouTube progress bar markers with JSON file storage",
+  "permissions": [
+    "storage",
+    "tabs",
+    "downloads"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [{
-      "matches": ["*://*.youtube.com/*"],
-      "css": ["styles.css"],
-      "js": ["content.js"],
-      "all_frames": true,
-      "run_at": "document_end"
+    "matches": ["*://*.youtube.com/*"],
+    "css": ["styles.css"],
+    "js": ["content.js"],
+    "all_frames": true,
+    "run_at": "document_end"
   }]
 }

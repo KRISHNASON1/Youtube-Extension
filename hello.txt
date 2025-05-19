@@ -1,1 +1,7 @@
 great work, lets go further resolving it.. now when i am writing a note so while typing it is trigging the shortcuts of youtube which while writing a note it all the shortcuts dhuold be truned off. also when i taking a note and when i space so it is triggring play/pause shortcut which i dont want while writing note. next thing i wnat is that when i am hovering over [ytp-marker-tooltip] so it shuold not trigger any other hovering feature like it triggers 
+
+
+
+here is my updated code i need to add a toogle button just after this button \[class="ytp-button custom-marker-button"] and what this toggle will do that it will toggle my extension so if i need to turn my extension off i can click on it and all the features of my website will be truned off and then i can use all the features of orignal youtube like preview of hover on video scrubber etc, if i turn on so i can use my extension again. Please remember this all the toggle thing should be happen without reloading the page
+
+umm it is working but i need to be it perfect like if i click on it so some of the features liek \[class="ytp-button custom-marker-button"] and all the things from \[class="ytp-timed-markers-container"]etc are not getting removed, please make sure if the extesnion is off so every thing should be turned off including all the css and everything and at that time youtube should just work line orignnal one no modifcations in it and should work smooth as it usually works.

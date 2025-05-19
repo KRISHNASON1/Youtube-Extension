@@ -1,16 +1,89 @@
-// content.js
-const storage = JSON.parse(localStorage.getItem('ytMarkers')) || {};
+// content.js with improved JSON file storage implementation
+
+// Initialize storage - we'll use a variable to hold the data until we sync with the file
+let notesData = {};
+let isDataLoaded = false;
 
 // --------------------------------------------------------------------------
-// Helpers
+// File Storage Helpers
 // --------------------------------------------------------------------------
 
+// Function to get video endpoint (identifier) from current URL
+function getVideoEndpoint() {
+  const url = new URL(window.location.href);
+  const videoId = url.searchParams.get('v');
+  return videoId || url.pathname; // Fallback to pathname if no v parameter
+}
+
+// Function to get the video title
+function getVideoTitle() {
+  const titleEl = document.querySelector('h1.style-scope.ytd-watch-metadata yt-formatted-string');
+  return titleEl?.textContent || 'Untitled';
+}
+
+// Save notes data to JSON file via background script
+function saveNotesToFile() {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({
+      action: "saveNotes", 
+      data: notesData
+    }, response => {
+      if (response && response.success) {
+        console.log("Notes saved to file successfully");
+        resolve(response);
+      } else {
+        console.error("Failed to save notes to file:", response?.error);
+        reject(new Error(response?.error || "Unknown error saving notes"));
+      }
+    });
+  });
+}
+
+// Load notes data from JSON file via background script
+function loadNotesFromFile() {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({
+      action: "loadNotes"
+    }, response => {
+      if (response && response.success) {
+        notesData = response.data || {};
+        isDataLoaded = true;
+        console.log("Notes loaded from file:", notesData);
+        resolve(notesData);
+      } else {
+        console.error("Failed to load notes:", response?.error);
+        notesData = {};
+        isDataLoaded = true;
+        resolve({});
+      }
+    });
+  });
+}
+
+// Initialize storage when the extension loads
+function initStorage() {
+  loadNotesFromFile().then((data) => {
+    console.log("Notes loaded from file", data);
+    renderAllNotes();
+  }).catch(err => {
+    console.error("Error loading notes:", err);
+    notesData = {};
+    isDataLoaded = true;
+  });
+}
+
+// --------------------------------------------------------------------------
+// Note Management Functions
+// --------------------------------------------------------------------------
+
+// Format time for display
 function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+// Convert time string to seconds
 function timeToSeconds(timeStr) {
   const parts = timeStr.split(':');
   return parts.length === 2
@@ -18,10 +91,61 @@ function timeToSeconds(timeStr) {
     : 0;
 }
 
-function updateAllNoteEditors(noteId, newTime, newContent) {
-  storage[noteId] = { time: newTime, content: newContent };
-  localStorage.setItem('ytMarkers', JSON.stringify(storage));
+// Update note data and sync with JSON file
+function updateNote(noteId, newTime, newContent) {
+  const endpoint = getVideoEndpoint();
+  
+  // Initialize endpoint if it doesn't exist
+  if (!notesData[endpoint]) {
+    notesData[endpoint] = {
+      title: getVideoTitle(),
+      notes: {}
+    };
+  }
+  
+  // Update note data
+  notesData[endpoint].notes[noteId] = { 
+    time: newTime, 
+    content: newContent 
+  };
+  
+  // Save to file (with error handling)
+  saveNotesToFile()
+    .then(() => {
+      // Update DOM elements
+      updateAllNoteEditors(noteId, newTime, newContent);
+    })
+    .catch(err => {
+      console.error("Error saving note:", err);
+      // Still update the UI even if save fails
+      updateAllNoteEditors(noteId, newTime, newContent);
+    });
+}
 
+// Delete a note
+function deleteNote(noteId) {
+  const endpoint = getVideoEndpoint();
+  
+  if (notesData[endpoint] && notesData[endpoint].notes && notesData[endpoint].notes[noteId]) {
+    delete notesData[endpoint].notes[noteId];
+    
+    saveNotesToFile()
+      .then(() => {
+        // Remove DOM elements
+        const elements = document.querySelectorAll(`[data-note-id="${noteId}"]`);
+        elements.forEach(el => el.remove());
+      })
+      .catch(err => {
+        console.error("Error deleting note:", err);
+        // Still remove from UI even if save fails
+        const elements = document.querySelectorAll(`[data-note-id="${noteId}"]`);
+        elements.forEach(el => el.remove());
+      });
+  }
+}
+
+// Update all note editors with the same ID
+function updateAllNoteEditors(noteId, newTime, newContent) {
   // Force DOM refresh before querying elements
   requestAnimationFrame(() => {
     const elements = document.querySelectorAll(`[data-note-id="${noteId}"]`);
@@ -57,6 +181,77 @@ function updateAllNoteEditors(noteId, newTime, newContent) {
         selection.addRange(range);
       }
     });
+  });
+}
+
+// Render all notes for the current video
+function renderAllNotes() {
+  if (!isDataLoaded) {
+    console.log("Notes data not loaded yet, waiting...");
+    return;
+  }
+  
+  const endpoint = getVideoEndpoint();
+  const savedNotesContainer = document.getElementById('savedNotes');
+  if (!savedNotesContainer) {
+    console.log("No saved notes container found, creating one...");
+    return;
+  }
+  
+  // Clear existing notes
+  savedNotesContainer.innerHTML = '';
+  
+  // If we have notes for this video, render them
+  if (notesData[endpoint] && notesData[endpoint].notes) {
+    const notes = notesData[endpoint].notes;
+    
+    // Sort notes by time (newest first)
+    const sortedNoteIds = Object.keys(notes).sort((a, b) => {
+      const timeA = timeToSeconds(notes[a].time);
+      const timeB = timeToSeconds(notes[b].time);
+      return timeB - timeA; // Newest first
+    });
+    
+    console.log(`Rendering ${sortedNoteIds.length} notes for video ${endpoint}`);
+    
+    // Create markers for each note
+    sortedNoteIds.forEach(noteId => {
+      const note = notes[noteId];
+      
+      // Create a marker on the progress bar
+      createMarkerForNote(noteId, note.time, note.content, false);
+      
+      // Create the note in the saved notes container
+      const noteView = createNoteView(note.content, note.time, noteId);
+      savedNotesContainer.appendChild(noteView);
+    });
+  } else {
+    console.log(`No notes found for video ${endpoint}`);
+  }
+}
+
+// Function to position all markers based on stored time values
+function positionAllMarkers() {
+  const video = document.querySelector('video');
+  if (!video) return;
+  
+  const endpoint = getVideoEndpoint();
+  if (!notesData[endpoint] || !notesData[endpoint].notes) return;
+  
+  const notes = notesData[endpoint].notes;
+  const progressBar = document.querySelector('.ytp-progress-bar');
+  if (!progressBar) return;
+  
+  // Find all markers and position them
+  Object.keys(notes).forEach(noteId => {
+    const marker = progressBar.querySelector(`[data-note-id="${noteId}"]`);
+    if (marker) {
+      const timeInSeconds = timeToSeconds(notes[noteId].time);
+      marker.style.left = `calc(${(timeInSeconds / video.duration) * 100}% - 1.5px)`;
+    } else {
+      // Marker doesn't exist yet, create it
+      createMarkerForNote(noteId, notes[noteId].time, notes[noteId].content, false);
+    }
   });
 }
 
@@ -115,94 +310,81 @@ function createNoteEditor(noteId, time, content, isTooltip) {
   stylesDropdown.className = 'note-styles-dropdown';
   stylesDropdown.style.display = 'none';
 
-// Update the styles dropdown creation in createNoteEditor
-['Normal','Quote','Heading 4'].forEach(text => {
-  const opt = document.createElement('div');
-  opt.textContent = text;
-  opt.style.padding = '8px 12px';
-  opt.style.fontSize = '14px';
-  opt.style.cursor = 'pointer';
-  
-  opt.addEventListener('click', e => {
-    e.stopPropagation();
-    let block = 'p';
+  ['Normal','Quote','Heading 4'].forEach(text => {
+    const opt = document.createElement('div');
+    opt.textContent = text;
+    opt.style.padding = '8px 12px';
+    opt.style.fontSize = '14px';
+    opt.style.cursor = 'pointer';
     
-    if (text === 'Quote') {
-      block = 'blockquote';
-      // Add additional quote formatting
-      document.execCommand('formatBlock', false, block);
-      document.execCommand('foreColor', false, '#64748b');
-      document.execCommand('fontSize', false, '4');
-    } 
-    else if (text === 'Heading 4') {
-      block = 'h4';
-      // Add heading-specific formatting
-      document.execCommand('formatBlock', false, block);
-      document.execCommand('fontSize', false, '5');
-      document.execCommand('foreColor', false, '#1e293b');
-    } 
-    else {
-      // Reset to normal
-      document.execCommand('formatBlock', false, 'p');
-      document.execCommand('removeFormat');
-    }
+    opt.addEventListener('click', e => {
+      e.stopPropagation();
+      let block = 'p';
+      
+      if (text === 'Quote') {
+        block = 'blockquote';
+        document.execCommand('formatBlock', false, block);
+        document.execCommand('foreColor', false, '#64748b');
+        document.execCommand('fontSize', false, '4');
+      } 
+      else if (text === 'Heading 4') {
+        block = 'h4';
+        document.execCommand('formatBlock', false, block);
+        document.execCommand('fontSize', false, '5');
+        document.execCommand('foreColor', false, '#1e293b');
+      } 
+      else {
+        document.execCommand('formatBlock', false, 'p');
+        document.execCommand('removeFormat');
+      }
 
-    stylesDropdown.style.display = 'none';
-    noteEditor.focus();
+      stylesDropdown.style.display = 'none';
+      noteEditor.focus();
+    });
+    
+    stylesDropdown.appendChild(opt);
   });
-  
-  stylesDropdown.appendChild(opt);
-});
 
-// Update the stylesBtn event listener to properly position dropdown
-stylesBtn.addEventListener('click', e => {
-  e.stopPropagation();
-  const rect = stylesBtn.getBoundingClientRect();
-  stylesDropdown.style.display = 
-    stylesDropdown.style.display === 'none' ? 'block' : 'none';
-  
-  // Position dropdown relative to button
-  stylesDropdown.style.left = '0';
-  stylesDropdown.style.top = `${rect.height + 5}px`;
-});
+  stylesBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const rect = stylesBtn.getBoundingClientRect();
+    stylesDropdown.style.display = 
+      stylesDropdown.style.display === 'none' ? 'block' : 'none';
+    
+    stylesDropdown.style.left = '0';
+    stylesDropdown.style.top = `${rect.height + 5}px`;
+  });
 
-
-
-
-
-  // ——— Wire up formatting:
   boldBtn.addEventListener('click', e => {
     e.stopPropagation();
     document.execCommand('bold', false, null);
     noteEditor.focus();
   });
+
   italicBtn.addEventListener('click', e => {
     e.stopPropagation();
     document.execCommand('italic', false, null);
     noteEditor.focus();
   });
-// In the createNoteEditor function, update the list button event listener:
+
   listBtn.addEventListener('click', e => {
     e.stopPropagation();
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
     
-    // Save current selection
     const range = selection.getRangeAt(0);
     
-    // Execute list command
     document.execCommand('insertUnorderedList', false, null);
 
-    // Restore selection and focus
     selection.removeAllRanges();
     selection.addRange(range);
     noteEditor.focus();
     
-    // Force redraw for immediate visual feedback
     noteEditor.style.display = 'none';
     noteEditor.offsetHeight; // Trigger reflow
     noteEditor.style.display = 'block';
   });
+
   codeBtn.addEventListener('click', e => {
     e.stopPropagation();
     document.execCommand('formatBlock', false, 'pre');
@@ -226,8 +408,6 @@ stylesBtn.addEventListener('click', e => {
   noteEditor.innerHTML = content;
   container.appendChild(noteEditor);
 
-
-
   ['mousedown','mouseup','click'].forEach(evt => {
     noteEditor.addEventListener(evt, e => e.stopPropagation());
   });
@@ -238,36 +418,32 @@ stylesBtn.addEventListener('click', e => {
     charCount.textContent = noteEditor.innerText.length;
   });
 
-// Update the noteEditor keydown handler in createNoteEditor
-noteEditor.addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') {
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return;
-    
-    const range = selection.getRangeAt(0);
-    const parentBlock = range.commonAncestorContainer.closest('blockquote, h4, p');
-    
-    // Check if we're in a formatted block
-    if (parentBlock?.closest('blockquote, h4')) {
-      e.preventDefault();
+  noteEditor.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      const selection = window.getSelection();
+      if (!selection.rangeCount) return;
       
-      // Create new paragraph after formatted block
-      const formattedBlock = parentBlock.closest('blockquote, h4');
-      const newParagraph = document.createElement('p');
-      newParagraph.innerHTML = '<br>';
+      const range = selection.getRangeAt(0);
+      const parentBlock = range.commonAncestorContainer.closest('blockquote, h4, p');
       
-      // Insert after formatted block
-      formattedBlock.parentNode.insertBefore(newParagraph, formattedBlock.nextSibling);
-      
-      // Move cursor
-      const newRange = document.createRange();
-      newRange.selectNodeContents(newParagraph);
-      newRange.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
+      if (parentBlock?.closest('blockquote, h4')) {
+        e.preventDefault();
+        
+        const formattedBlock = parentBlock.closest('blockquote, h4');
+        const newParagraph = document.createElement('p');
+        newParagraph.innerHTML = '<br>';
+        
+        formattedBlock.parentNode.insertBefore(newParagraph, formattedBlock.nextSibling);
+        
+        const newRange = document.createRange();
+        newRange.selectNodeContents(newParagraph);
+        newRange.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      }
     }
-  }
-});
+  });
+
   // ——— Actions
   const actions = document.createElement('div');
   actions.className = 'note-actions';
@@ -277,11 +453,18 @@ noteEditor.addEventListener('keydown', function(e) {
   cancelBtn.textContent = 'Cancel';
   cancelBtn.addEventListener('click', () => {
     if (container.classList.contains('ytp-marker-tooltip')) {
-      if (storage[noteId]) noteEditor.innerHTML = storage[noteId].content;
+      const endpoint = getVideoEndpoint();
+      if (notesData[endpoint]?.notes?.[noteId]) {
+        noteEditor.innerHTML = notesData[endpoint].notes[noteId].content;
+      }
       container.style.display = 'none';
     } else {
-      if (storage[noteId]) noteEditor.innerHTML = storage[noteId].content;
-      else container.remove();
+      const endpoint = getVideoEndpoint();
+      if (notesData[endpoint]?.notes?.[noteId]) {
+        noteEditor.innerHTML = notesData[endpoint].notes[noteId].content;
+      } else {
+        container.remove();
+      }
     }
   });
 
@@ -295,17 +478,19 @@ noteEditor.addEventListener('keydown', function(e) {
       alert('Note cannot be empty');
       return;
     }
-    updateAllNoteEditors(noteId, time, newContent);
+
+    // Save the note to our data structure and file
+    updateNote(noteId, time, newContent);
 
     if (container.classList.contains('inline-editing')) {
-      const finalView = window.createNoteView(newContent, time, noteId);
+      const finalView = createNoteView(newContent, time, noteId);
       container.parentNode.replaceChild(finalView, container);
     }
     if (container.classList.contains('ytp-marker-tooltip')) {
       container.style.display = 'none';
       const savedNotes = document.getElementById('savedNotes');
       if (!savedNotes.querySelector(`[data-note-id="${noteId}"]`)) {
-        savedNotes.appendChild(window.createNoteView(newContent, time, noteId));
+        savedNotes.appendChild(createNoteView(newContent, time, noteId));
       }
     }
   });
@@ -320,10 +505,15 @@ noteEditor.addEventListener('keydown', function(e) {
 // --------------------------------------------------------------------------
 // Create Marker for Note (Tooltip Version)
 // --------------------------------------------------------------------------
-function createMarkerForNote(noteId, time, initialContent) {
+function createMarkerForNote(noteId, time, initialContent, shouldClick = true) {
   const video = document.querySelector('video');
   if (!video) return;
   const progressBar = document.querySelector('.ytp-progress-bar');
+  if (!progressBar) return;
+
+  // Check if marker already exists
+  const existingMarker = progressBar.querySelector(`[data-note-id="${noteId}"]`);
+  if (existingMarker) return existingMarker;
 
   // Create the marker
   const marker = document.createElement('div');
@@ -400,23 +590,110 @@ function createMarkerForNote(noteId, time, initialContent) {
     }
   });
 
-  // Add the marker, then immediately simulate a click
+  // Add the marker, then simulate a click if requested
   progressBar.appendChild(marker);
-  marker.click();  // ← uses your marker’s own click logic to open the tooltip
+  if (shouldClick) {
+    marker.click();  // Open the tooltip
+  }
 
   return marker;
 }
 
+// --------------------------------------------------------------------------
+// Create Note View (Final View after saving)
+// --------------------------------------------------------------------------
+function createNoteView(noteContent, noteTime, noteId) {
+  const container = document.createElement('div');
+  container.className = 'saved-note-container';
+  container.dataset.noteId = noteId;
 
+  const header = document.createElement('div');
+  header.className = 'note-header';
 
+  const timeSpan = document.createElement('span');
+  timeSpan.className = 'note-time';
+  timeSpan.textContent = noteTime || '00:00';
+  header.appendChild(timeSpan);
+
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'note-actions';
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'note-btn note-edit';
+  editBtn.textContent = '✏️';
+  editBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const endpoint = getVideoEndpoint();
+    const noteData = notesData[endpoint]?.notes?.[noteId] || { time: noteTime, content: '' };
+    const editor = createNoteEditor(
+      noteId, 
+      noteData.time,
+      noteData.content,
+      false
+    );
+    container.parentNode.replaceChild(editor, container);
+  });
+  actionsDiv.appendChild(editBtn);
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'note-btn note-delete';
+  deleteBtn.textContent = '🗑️';
+  deleteBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    deleteNote(noteId);
+  });
+  actionsDiv.appendChild(deleteBtn);
+
+  header.appendChild(actionsDiv);
+  container.appendChild(header);
+
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'note-content';
+
+  const endpoint = getVideoEndpoint();
+  const videoTitle = notesData[endpoint]?.title || getVideoTitle();
+
+  const headingEl = document.createElement('h3');
+  headingEl.className = 'note-title';
+  headingEl.textContent = videoTitle;
+  contentDiv.appendChild(headingEl);
+
+  const subheadingEl = document.createElement('p');
+  subheadingEl.className = 'note-subtitle';
+  contentDiv.appendChild(subheadingEl);
+
+  const bodyDiv = document.createElement('div');
+  bodyDiv.className = 'note-body';
+  bodyDiv.innerHTML = noteContent || '<br>'; 
+  contentDiv.appendChild(bodyDiv);
+
+  container.appendChild(contentDiv);
+  
+  // Add click event to seek to timestamp
+  container.addEventListener('click', (e) => {
+    if (!e.target.closest('.note-btn')) {
+      const video = document.querySelector('video');
+      if (video) {
+        video.currentTime = timeToSeconds(noteTime);
+      }
+    }
+  });
+  
+  return container;
+}
 
 // --------------------------------------------------------------------------
 // Inject UI Toolbar & Inline Note Creation
 // --------------------------------------------------------------------------
-(function injectUIToolbar() {
+function injectUIToolbar() {
   function createUI() {
     const target = document.querySelector('.watch-active-metadata.style-scope.ytd-watch-flexy');
     if (!target) return setTimeout(createUI, 1000);
+
+    // Check if UI already exists
+    if (document.querySelector('.custom-ui-toolbar')) {
+      return;
+    }
 
     const container = document.createElement('div');
     container.className = 'custom-ui-toolbar';
@@ -455,10 +732,15 @@ function createMarkerForNote(noteId, time, initialContent) {
       }
     });
 
-    const savedNotesContainer = document.createElement('div');
-    savedNotesContainer.id = 'savedNotes';
-    container.parentNode.insertBefore(savedNotesContainer, container.nextSibling);
+    // Create saved notes container if it doesn't exist
+    let savedNotesContainer = document.getElementById('savedNotes');
+    if (!savedNotesContainer) {
+      savedNotesContainer = document.createElement('div');
+      savedNotesContainer.id = 'savedNotes';
+      container.parentNode.insertBefore(savedNotesContainer, container.nextSibling);
+    }
 
+    // Add click handler for the create note button
     document.getElementById('createNoteButton').addEventListener('click', () => {
       const video = document.querySelector('video');
       if (!video) return;
@@ -468,131 +750,47 @@ function createMarkerForNote(noteId, time, initialContent) {
       const inline = createNoteEditor(noteId, timeFormatted, '', false);
       savedNotesContainer.insertBefore(inline, savedNotesContainer.firstChild);
       createMarkerForNote(noteId, timeFormatted, '');
-      storage[noteId] = {
-        time: timeFormatted,
-        content: '',
-        title: getVideoTitle() // Store title at creation
-      };
-      localStorage.setItem('ytMarkers', JSON.stringify(storage));
+      
+      // Initialize the note in our data structure
+      updateNote(noteId, timeFormatted, '');
     });
 
-    function getVideoTitle() {
-      const titleEl = document.querySelector('h1.style-scope.ytd-watch-metadata yt-formatted-string');
-      return titleEl?.textContent || 'Untitled';
-    }
-
-    // Final view (non-editable) uses .saved-note-container
-    window.createNoteView = function(noteContent, noteTime, noteId) {
-      const container = document.createElement('div');
-      container.className = 'saved-note-container';
-      container.dataset.noteId = noteId; // Always set the ID
-
-      const header = document.createElement('div');
-      header.className = 'note-header';
-
-      const timeSpan = document.createElement('span');
-      timeSpan.className = 'note-time';
-      timeSpan.textContent = noteTime || '00:00';
-      header.appendChild(timeSpan);
-
-      const actionsDiv = document.createElement('div');
-      actionsDiv.className = 'note-actions';
-
-      const editBtn = document.createElement('button');
-      editBtn.className = 'note-btn note-edit';
-      editBtn.textContent = '✏️';
-      editBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        const currentData = storage[noteId] || { time: '00:00', content: '' };
-        const editor = createNoteEditor(
-          noteId, 
-          currentData.time,  // Use storage time
-          currentData.content,  // Use storage content
-          false
-        );
-        container.parentNode.replaceChild(editor, container);
-      });
-      actionsDiv.appendChild(editBtn);
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'note-btn note-delete';
-      deleteBtn.textContent = '🗑️';
-      deleteBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        const all = document.querySelectorAll(`[data-note-id="${noteId}"]`);
-        all.forEach(el => el.remove());
-        delete storage[noteId];
-        localStorage.setItem('ytMarkers', JSON.stringify(storage));
-      });
-      actionsDiv.appendChild(deleteBtn);
-
-      header.appendChild(actionsDiv);
-      container.appendChild(header);
-
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'note-content';
-
-      const headingEl = document.createElement('h3');
-      headingEl.className = 'note-title';
-      headingEl.textContent = storage[noteId]?.title || getVideoTitle();
-      contentDiv.appendChild(headingEl);
-
-      const subheadingEl = document.createElement('p');
-      subheadingEl.className = 'note-subtitle';
-      contentDiv.appendChild(subheadingEl);
-
-      
-
-      const bodyDiv = document.createElement('div');
-      bodyDiv.className = 'note-body';
-      bodyDiv.innerHTML = noteContent || '<br>'; 
-      contentDiv.appendChild(bodyDiv);
-
-
-      container.appendChild(contentDiv);
-      return container;
-    };
+    // Re-render all notes for the current video
+    renderAllNotes();
   }
 
   createUI();
-})();
+}
 
 // --------------------------------------------------------------------------
-// Existing Marker Button in YouTube Controls
+// Marker Button in YouTube Controls
 // --------------------------------------------------------------------------
-(function() {
+function addMarkerButton() {
   const markerButton = document.createElement('button');
   markerButton.className = 'ytp-button custom-marker-button';
   markerButton.title = 'Add timestamp marker';
   markerButton.innerHTML = `<svg viewBox="0 0 24 24"><path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z"/></svg>`;
 
-// Modify the marker button click handler in the "Existing Marker Button" section
-markerButton.addEventListener('click', () => {
-  const video = document.querySelector('video');
-  if (!video) return;
-  const t = video.currentTime;
-  const tf = formatTime(t);
-  const noteId = Date.now().toString();
-  
-  // Create the marker and tooltip
-  createMarkerForNote(noteId, tf, '');
-  
-  // Immediately create and insert the saved note container
-  const savedNotesContainer = document.getElementById('savedNotes');
-  if (savedNotesContainer) {
-    const savedNote = window.createNoteView('', tf, noteId);
-    savedNotesContainer.insertBefore(savedNote, savedNotesContainer.firstChild);
-  }
-  
-  // Initialize empty entry in storage
-   // Initialize entry with title
-   storage[noteId] = { 
-    time: tf, 
-    content: '', 
-    title: getVideoTitle() // Store title at creation
-  };
-  localStorage.setItem('ytMarkers', JSON.stringify(storage));
-});
+  markerButton.addEventListener('click', () => {
+    const video = document.querySelector('video');
+    if (!video) return;
+    const t = video.currentTime;
+    const tf = formatTime(t);
+    const noteId = Date.now().toString();
+    
+    // Create the marker and tooltip
+    createMarkerForNote(noteId, tf, '');
+    
+    // Immediately create and insert the saved note container
+    const savedNotesContainer = document.getElementById('savedNotes');
+    if (savedNotesContainer) {
+      const savedNote = createNoteView('', tf, noteId);
+      savedNotesContainer.insertBefore(savedNote, savedNotesContainer.firstChild);
+    }
+    
+    // Initialize empty entry in storage
+    updateNote(noteId, tf, '');
+  });
 
   function addButtonToControls() {
     const controls = document.querySelector('.ytp-left-controls');
@@ -604,12 +802,4 @@ markerButton.addEventListener('click', () => {
   }
 
   addButtonToControls();
-  setInterval(addButtonToControls, 1000);
-})();
-
-// --------------------------------------------------------------------------
-// Initialize on Page Load
-// --------------------------------------------------------------------------
-document.addEventListener('DOMContentLoaded', () =>
-  console.log('YouTube Progress Bar Tools initialized')
-);
+}
